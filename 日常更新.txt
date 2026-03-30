@@ -1,0 +1,20 @@
+# 1. 进入项目目录（同上）
+cd /path/to/your-project
+
+# 2. 拉取远程最新代码（必做！避免和他人修改冲突）
+git pull origin main
+
+# 3. 查看本地修改状态（可选，确认要上传的文件）
+git status
+
+# 新增.清除 Git 缓存中的 html 目录（不小心加入的目录）
+git rm -r --cached html
+
+# 4. 暂存修改（. 代表所有修改，也可指定文件如 git add src/index.js）
+git add .
+
+# 5. 本地提交（备注写清楚修改内容，如「修复首页按钮样式」）
+git commit -m "修改1"
+
+# 6. 推送到远程（已关联分支，直接push即可）
+git push origin main
