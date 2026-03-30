@@ -1,0 +1,16 @@
+# 用轻量化运行时运行你的JAR包
+./jdk11-light/bin/java -jar your-program.jar
+
+
+
+
+
+（把上面的回复喂给ai，ai会给下面的适配的）
+:: 注意：请先确认你的JAVA_HOME指向JDK11安装目录（比如C:\Program Files\Java\jdk-11.0.19）
+jlink --module-path %JAVA_HOME%\jmods ^
+      --add-modules java.base,java.desktop,java.logging ^
+      --output jdk11-light-gis ^
+      --strip-debug ^
+      --compress=2 ^
+      --no-header-files ^
+      --no-man-pages

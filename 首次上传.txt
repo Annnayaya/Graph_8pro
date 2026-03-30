@@ -1,0 +1,22 @@
+# 首次上传
+# 1. 进入本地项目根目录（替换为你的项目路径）
+cd /Users/xxx/Desktop/your-project  # macOS/Linux
+# cd C:\Users\xxx\Desktop\your-project  # Windows
+
+# 2. 初始化Git仓库（本地创建.git目录，仅首次执行）
+git init
+
+# 3. 暂存所有文件（把项目文件加入Git跟踪）
+git add .
+
+# 4. 本地提交（记录本次上传的版本，备注要清晰）
+git commit -m "首次上传：初始化项目"
+
+# 5. 关联GitHub远程仓库（替换为你的仓库地址，HTTPS/SSH都可以）
+# HTTPS方式（简单，首次需输令牌）
+git remote add origin https://github.com/你的用户名/仓库名.git
+# SSH方式（推荐，免重复验证，需提前配置SSH密钥）
+# git remote add origin git@github.com:你的用户名/仓库名.git
+
+# 6. 首次推送（-u 关联本地main分支和远程main分支，后续推送可省略）
+git push -u origin main

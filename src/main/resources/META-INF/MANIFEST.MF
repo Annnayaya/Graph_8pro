@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Main-Class: com.Spectrogram.ZmGis8CH.gis_app_8CH.GisXYZ
+Class-Path: commons-logging-1.2.jar commons-codec-1.9.jar freemarker-2.3
+ .13.jar httpclient-4.5.2.jar httpcore-4.4.4.jar fastjson-1.2.58.jar
+

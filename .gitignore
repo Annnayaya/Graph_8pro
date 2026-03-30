@@ -1,0 +1,31 @@
+# ========== IDE 及本地配置 ==========
+.idea/
+*.iml
+# 如果团队中没人使用 Eclipse，建议忽略以下 Eclipse 配置文件
+.project
+.classpath
+.settings/
+
+# ========== 编译输出与构建产物 ==========
+out/
+target/
+FinalRelease/
+dependency-reduced-pom.xml
+
+# ========== 本地运行环境 (体积大且因人而异，绝对不要上传) ==========
+jdk11-*/
+jdk11-轻量化版本 (适配当前项目)/
+jre/
+
+# ========== 运行时生成的业务数据、报告和临时文件 ==========
+# 注意：如果这些目录/文件包含项目启动必须的默认模板，请将它们从这里移除
+data/
+report/
+reportdata/
+data.txt
+option.dat
+*.log
+
+# ========== 操作系统临时文件 ==========
+.DS_Store
+Thumbs.db
