@@ -14,7 +14,7 @@ git rm -r --cached html
 git add .
 
 # 5. 本地提交（备注写清楚修改内容，如「修复首页按钮样式」）
-git commit -m "修改1"
+git commit -m "修改1,现在可以根据报错文件修改软件默认使用的端口"
 
 # 6. 推送到远程（已关联分支，直接push即可）
 git push origin main
