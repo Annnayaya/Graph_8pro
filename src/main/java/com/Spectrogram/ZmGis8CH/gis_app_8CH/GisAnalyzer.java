@@ -1,6 +1,4 @@
 package com.Spectrogram.ZmGis8CH.gis_app_8CH;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 
 class GisAnalyzer
 {
@@ -44,18 +42,12 @@ class GisAnalyzer
 
 	private void savePatternFile(double ad[])
 	{
-		try
-		{
-			BufferedWriter bufferedwriter = new BufferedWriter(new FileWriter("pattern.txt", true));
-			bufferedwriter.write(String.format("{%1.2ff, %1.2ff, %1.2ff, %1.2ff, %1.2ff, 1.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f},\n", new Object[] {
-				Double.valueOf(ad[0]), Double.valueOf(ad[1]), Double.valueOf(ad[2]), Double.valueOf(ad[3]), Double.valueOf(ad[4])
-			}));
-			bufferedwriter.close();
-		}
-		catch (Exception exception)
-		{
-			exception.printStackTrace();
-		}
+        // 【新增拦截】：如果提取出来的第一个特征是 NaN，说明这个通道没信号，直接跳过，不保存！
+        if (Double.isNaN(ad[0])) {
+            return;
+        }
+
+		// 已根据需求彻底移除 pattern.txt 的输出
 	}
 
 	public void gaProc(int i, int j, int k)
@@ -83,7 +75,7 @@ class GisAnalyzer
 
 		sig_avg = (int)(f / (float)j3);
 		sig_cnt = j3;
-		if (++p_cnt >= 8)
+		if (++p_cnt >= 4)
 		{
 			ltm.ltMapCore(rtb.internalPRPS);
 			p_cnt = 0;

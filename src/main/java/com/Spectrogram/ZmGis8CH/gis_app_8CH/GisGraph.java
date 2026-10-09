@@ -20,6 +20,52 @@ class GisGraph extends JComponent implements Printable
 	double amxdBm;
 	double f2dBm;//频率成分2
 	double f1dBm;//频率成分1
+	private volatile boolean persistentPeakMode = false;
+	private volatile boolean persistentPeakReady = false;
+	private volatile double persistentPeakDbm = Double.NaN;
+
+	public void applyPersistentPeak(PersistentPeakSnapshot snapshot, int channel) {
+		if (snapshot == null) {
+			this.persistentPeakReady = false;
+			this.persistentPeakDbm = Double.NaN;
+			return;
+		}
+		this.persistentPeakReady = snapshot.isValid(channel) && !Double.isNaN(snapshot.getPublishedDbm(channel));
+		this.persistentPeakDbm = snapshot.getPublishedDbm(channel);
+	}
+
+	public void clearPersistentPeak() {
+		this.persistentPeakReady = false;
+		this.persistentPeakDbm = Double.NaN;
+	}
+
+	public void setPersistentPeakMode(boolean mode) {
+		this.persistentPeakMode = mode;
+	}
+
+	public boolean isPersistentPeakMode() {
+		return persistentPeakMode;
+	}
+
+	public double getDisplayedPeakDbm() {
+		boolean usePersistentPeak = (persistentPeakMode || AppGlobalConfig.isSpectrogramPeakFollowFiltered())
+				&& AppGlobalConfig.isPersistentPeakEnabled();
+		if (usePersistentPeak && persistentPeakReady && !Double.isNaN(persistentPeakDbm)) {
+			return persistentPeakDbm;
+		}
+		return amxdBm;
+	}
+
+	private boolean isAlarming = false;
+
+	public void setAlarming(boolean alarming) {
+		this.isAlarming = alarming;
+	}
+
+	public boolean isAlarming() {
+		return isAlarming;
+	}
+
 	double effdBm;//有效值
 	int cycleSum[];
 	int cycleMax[];
@@ -480,6 +526,29 @@ class GisGraph extends JComponent implements Printable
 		}
 	}
 
+	private void drawUnitString(Graphics2D graphics2d, String s1, int j, int k, int l)
+	{
+		Font font = graphics2d.getFont();
+		FontMetrics fontmetrics = graphics2d.getFontMetrics(font);
+		int i1 = fontmetrics.stringWidth(s1);
+		graphics2d.drawString(s1, l != 0 ? j - i1 : j, k);
+	}
+
+	private void drawUnitDouble(Graphics2D graphics2d, double val, int j, int k, int l, String s, boolean change, int unit)
+	{
+		if (Double.isNaN(val)) {
+			drawUnitString(graphics2d, s + "--", j, k, l);
+			return;
+		}
+		boolean isDbm = (change && Option.unitType == 0) || (!change && unit == 0);
+		if (isDbm) {
+			String s1 = s + PeakValueFormatter.formatForUi(val) + "dBm";
+			drawUnitString(graphics2d, s1, j, k, l);
+		} else {
+			drawUnit(graphics2d, (int)(val - 0.5D), j, k, l, s, change, unit);
+		}
+	}
+
 	//超声波倍率x
 	private void drawUnitxAz(Graphics2D graphics2d, int i, int j, int k, int l,String s, boolean change, int unit) 
 	{
@@ -740,17 +809,31 @@ class GisGraph extends JComponent implements Printable
 		else
 		if (GisXYZ.realTab == 0)
 			drawUnit(graphics2d, (int)(avrdBm - 0.5D), (k + i) - 4, (l + 35), 1, ChooseLang.M[401], drawchange, unitfault);
-		//if (GisXYZ.realTab == 0)
+		boolean usePersistentPeak = (persistentPeakMode || AppGlobalConfig.isSpectrogramPeakFollowFiltered())
+				&& AppGlobalConfig.isPersistentPeakEnabled();
+		if (usePersistentPeak)
+		{
+			if (persistentPeakReady && !Double.isNaN(persistentPeakDbm))
+			{
+				drawUnitDouble(graphics2d, persistentPeakDbm, (k + i) - 4, l + 20, 1, ChooseLang.M[400], drawchange, unitfault);
+				if (GisXYZ.realTab == 0)
+					drawInstructTriangle(graphics2d, 0,(int)((j/60.0D)*(-persistentPeakDbm)-((j/60.0D)*20.0D)),400/40,(int)((j/60.0D)*(-persistentPeakDbm)-((j/60.0D)*20.0D)-(400/40)*Math.tan(Math.PI/6)),400/40,(int)((j/60.0D)*(-persistentPeakDbm)-((j/60.0D)*20.0D)+(400/40)*Math.tan(Math.PI/6)),j,3);
+			} else
+			{
+				drawUnitString(graphics2d, ChooseLang.M[400] + "--", (k + i) - 4, l + 20, 1);
+			}
+		} else
+		{
 			drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, l + 20, 1, ChooseLang.M[400], drawchange, unitfault);
-
-				
+			if (GisXYZ.realTab == 0)
+				drawInstructTriangle(graphics2d, 0,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)),400/40,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)-(400/40)*Math.tan(Math.PI/6)),400/40,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)+(400/40)*Math.tan(Math.PI/6)),j,3);
+		}
 		for (int l2 = 0; l2 < 8; l2++)
 			drawOutlineString(graphics2d, resultString[l2], k + 4, l + 15 + 15 * l2, GisXYZ.anti_Color, GisXYZ.pure_Color);
-		//drawInstructTriangle(graphics2d,Color.CYAN,0,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)),i/40,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)-(i/40)*Math.tan(Math.PI/6)),i/40,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)+(i/40)*Math.tan(Math.PI/6)),j,3);
-		//drawInstructTriangle(graphics2d,Color.CYAN,0,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)),400/40,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)-(400/40)*Math.tan(Math.PI/6)),400/40,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)+(400/40)*Math.tan(Math.PI/6)),j,3);
-		if (GisXYZ.realTab == 0)
-			drawInstructTriangle(graphics2d, 0,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)),400/40,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)-(400/40)*Math.tan(Math.PI/6)),400/40,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)+(400/40)*Math.tan(Math.PI/6)),j,3);
 		drawOutlineString(graphics2d, stringToDraw, k + 4, l + 15, Color.yellow, Color.black);
+		if (isAlarming) {
+			drawOutlineString(graphics2d, "【幅值报警】", k + 4, l + 45, Color.RED, Color.BLACK);
+		}
 	}
 
 
@@ -970,15 +1053,31 @@ class GisGraph extends JComponent implements Printable
 		else
 		if (GisXYZ.realTab == 0)
 			drawUnit(graphics2d, (int)(avrdBm - 0.5D), (k + i) - 4, (l + 35), 1, ChooseLang.M[401], drawchange, unitfaults[ii1]);
-		//if (GisXYZ.realTab == 0)
+		boolean usePersistentPeak = (persistentPeakMode || AppGlobalConfig.isSpectrogramPeakFollowFiltered())
+				&& AppGlobalConfig.isPersistentPeakEnabled();
+		if (usePersistentPeak)
+		{
+			if (persistentPeakReady && !Double.isNaN(persistentPeakDbm))
+			{
+				drawUnitDouble(graphics2d, persistentPeakDbm, (k + i) - 4, l + 20, 1, ChooseLang.M[400], drawchange, unitfaults[ii1]);
+				if (GisXYZ.realTab == 0)
+					drawInstructTriangle(graphics2d, 0,(int)((j/60.0D)*(-persistentPeakDbm)-((j/60.0D)*20.0D)),400/40,(int)((j/60.0D)*(-persistentPeakDbm)-((j/60.0D)*20.0D)-(400/40)*Math.tan(Math.PI/6)),400/40,(int)((j/60.0D)*(-persistentPeakDbm)-((j/60.0D)*20.0D)+(400/40)*Math.tan(Math.PI/6)),j,3);
+			} else
+			{
+				drawUnitString(graphics2d, ChooseLang.M[400] + "--", (k + i) - 4, l + 20, 1);
+			}
+		} else
+		{
 			drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, l + 20, 1, ChooseLang.M[400], drawchange, unitfaults[ii1]);
+			if (GisXYZ.realTab == 0)
+				drawInstructTriangle(graphics2d, 0,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)),400/40,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)-(400/40)*Math.tan(Math.PI/6)),400/40,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)+(400/40)*Math.tan(Math.PI/6)),j,3);
+		}
 		for (int l2 = 0; l2 < 8; l2++)
 			drawOutlineString(graphics2d, resultString[l2], k + 4, l + 15 + 15 * l2, GisXYZ.anti_Color, GisXYZ.pure_Color);
-		//drawInstructTriangle(graphics2d,Color.CYAN,0,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)),i/40,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)-(i/40)*Math.tan(Math.PI/6)),i/40,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)+(i/40)*Math.tan(Math.PI/6)),j,3);
-		//drawInstructTriangle(graphics2d,Color.CYAN,0,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)),400/40,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)-(400/40)*Math.tan(Math.PI/6)),400/40,(int)((j/60.0D)*(-avrdBm)-((j/60.0D)*20.0D)+(400/40)*Math.tan(Math.PI/6)),j,3);
-		if (GisXYZ.realTab == 0)
-			drawInstructTriangle(graphics2d, 0,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)),400/40,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)-(400/40)*Math.tan(Math.PI/6)),400/40,(int)((j/60.0D)*(-amxdBm)-((j/60.0D)*20.0D)+(400/40)*Math.tan(Math.PI/6)),j,3);
 		drawOutlineString(graphics2d, stringToDraw, k + 4, l + 15, Color.yellow, Color.black);
+		if (isAlarming) {
+			drawOutlineString(graphics2d, "【幅值报警】", k + 4, l + 45, Color.RED, Color.BLACK);
+		}
 	}
 
 	/*
@@ -1209,7 +1308,15 @@ class GisGraph extends JComponent implements Printable
 		if (GisXYZ.realTab == 0)
 			drawUnit(graphics2d, (int)(avrdBm - 0.5D), (k + i) - 4, l + 55, 1, ChooseLang.M[401], drawchange, unitfault);
 		if (GisXYZ.realTab == 0)
-			drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, (l + 55) - 15, 1, ChooseLang.M[400], drawchange, unitfault);
+		{
+			if ((persistentPeakMode || AppGlobalConfig.isSpectrogramPeakFollowFiltered()) && persistentPeakReady && !Double.isNaN(persistentPeakDbm))
+			{
+				drawUnitDouble(graphics2d, persistentPeakDbm, (k + i) - 4, (l + 55) - 15, 1, ChooseLang.M[400], drawchange, unitfault);
+			} else
+			{
+				drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, (l + 55) - 15, 1, ChooseLang.M[400], drawchange, unitfault);
+			}
+		}
 		//数据展示
 		double[] trandata = new double[640];
 		//Random rd = new Random();
@@ -1312,7 +1419,15 @@ class GisGraph extends JComponent implements Printable
 		if (GisXYZ.realTab == 0)
 			drawUnit(graphics2d, (int)(avrdBm - 0.5D), (k + i) - 4, l + 55, 1, ChooseLang.M[401], drawchange, unitfault);
 		if (GisXYZ.realTab == 0)
-			drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, (l + 55) - 15, 1, ChooseLang.M[400], drawchange, unitfault);
+		{
+			if ((persistentPeakMode || AppGlobalConfig.isSpectrogramPeakFollowFiltered()) && persistentPeakReady && !Double.isNaN(persistentPeakDbm))
+			{
+				drawUnitDouble(graphics2d, persistentPeakDbm, (k + i) - 4, (l + 55) - 15, 1, ChooseLang.M[400], drawchange, unitfault);
+			} else
+			{
+				drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, (l + 55) - 15, 1, ChooseLang.M[400], drawchange, unitfault);
+			}
+		}
 		
 		graphics2d.drawString("90'", i / 4 - 6, j / 10);
 		graphics2d.drawString("180'", i / 2 - 10, j / 10);

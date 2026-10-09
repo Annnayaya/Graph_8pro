@@ -49,6 +49,50 @@ class PRPDGraph extends JComponent implements Printable
 	double amxdBm;
 	double f1dBm;
 	double f2dBm;
+	private volatile boolean persistentPeakMode = false;
+	private volatile boolean persistentPeakReady = false;
+	private volatile double persistentPeakDbm = Double.NaN;
+	private boolean isAlarming = false;
+
+	public void setAlarming(boolean alarming) {
+		this.isAlarming = alarming;
+	}
+
+	public boolean isAlarming() {
+		return isAlarming;
+	}
+
+	public void applyPersistentPeak(PersistentPeakSnapshot snapshot, int channel) {
+		if (snapshot == null) {
+			this.persistentPeakReady = false;
+			this.persistentPeakDbm = Double.NaN;
+			return;
+		}
+		this.persistentPeakReady = snapshot.isValid(channel) && !Double.isNaN(snapshot.getPublishedDbm(channel));
+		this.persistentPeakDbm = snapshot.getPublishedDbm(channel);
+	}
+
+	public void clearPersistentPeak() {
+		this.persistentPeakReady = false;
+		this.persistentPeakDbm = Double.NaN;
+	}
+
+	public void setPersistentPeakMode(boolean mode) {
+		this.persistentPeakMode = mode;
+	}
+
+	public boolean isPersistentPeakMode() {
+		return persistentPeakMode;
+	}
+
+	public double getDisplayedPeakDbm() {
+		boolean usePersistentPeak = (persistentPeakMode || AppGlobalConfig.isSpectrogramPeakFollowFiltered())
+				&& AppGlobalConfig.isPersistentPeakEnabled();
+		if (usePersistentPeak && persistentPeakReady && !Double.isNaN(persistentPeakDbm)) {
+			return persistentPeakDbm;
+		}
+		return amxdBm;
+	}
 	int Countprpd;//放电次数
 	int cycleSum32[];
 	int cycleMax[];
@@ -409,6 +453,29 @@ class PRPDGraph extends JComponent implements Printable
 		graphics2d.drawString(s1, l != 0 ? j - i1 : j, k);
 		//graphics2d.drawString((new StringBuilder()).append("").append(j1).toString(), l != 0 ? j - 26 : (j + i1) - 26, k - 8);
 	}
+
+	private void drawUnitString(Graphics2D graphics2d, String s1, int j, int k, int l)
+	{
+		Font font = graphics2d.getFont();
+		FontMetrics fontmetrics = graphics2d.getFontMetrics(font);
+		int i1 = fontmetrics.stringWidth(s1);
+		graphics2d.drawString(s1, l != 0 ? j - i1 : j, k);
+	}
+
+	private void drawUnitDouble(Graphics2D graphics2d, double val, int j, int k, int l, String s, boolean change, int unit)
+	{
+		if (Double.isNaN(val)) {
+			drawUnitString(graphics2d, s + "--", j, k, l);
+			return;
+		}
+		boolean isDbm = (change && Option.unitType == 0) || (!change && unit == 0);
+		if (isDbm) {
+			String s1 = s + PeakValueFormatter.formatForUi(val) + "dBm";
+			drawUnitString(graphics2d, s1, j, k, l);
+		} else {
+			drawUnit(graphics2d, (int)(val - 0.5D), j, k, l, s, change, unit);
+		}
+	}
 	
 	void redraw2D(Graphics g)
 	{
@@ -445,6 +512,15 @@ class PRPDGraph extends JComponent implements Printable
 		graphics2d.drawString(s, i, j + 1);
 		graphics2d.setPaint(color);
 		graphics2d.drawString(s, i, j);
+		if (isAlarming && s != null && s.equals(stringToDraw)) {
+			graphics2d.setPaint(Color.BLACK);
+			graphics2d.drawString("【幅值报警】", i - 1, j + 15);
+			graphics2d.drawString("【幅值报警】", i + 1, j + 15);
+			graphics2d.drawString("【幅值报警】", i, j + 15 - 1);
+			graphics2d.drawString("【幅值报警】", i, j + 15 + 1);
+			graphics2d.setPaint(Color.RED);
+			graphics2d.drawString("【幅值报警】", i, j + 15);
+		}
 	}
 	
 	public double dBm2mV(double i)
@@ -570,7 +646,7 @@ class PRPDGraph extends JComponent implements Printable
 		int f2 = (int)((i/80)*(f2dBm + 80));//频率成份2
 		*/
 		int avr = (int)((i/80)*((avrdBm + 80)/0.9D));//有效值=平均值/0.9
-		int max = (int)((i/80)*(amxdBm + 80));//峰值
+		int max = (int)((i/80)*(getDisplayedPeakDbm() + 80));//峰值
 		int f1 = (int)((i/80)*(f1dBm + 80));//频率成份1=平均值
 		int f2 = (int)((i/80)*(f2dBm + 80));//频率成份2
 		
@@ -610,7 +686,7 @@ class PRPDGraph extends JComponent implements Printable
 		drawOutlineString(graphics2d, stringToDraw, 4, 15, Color.yellow, Color.black);
 		*/		
 		drawUnit(graphics2d, (int)(avrdBm), (k + i/2) + 110, (int)(l + (j/18.0D)*2.0D) - 5, 1, "");
-		drawUnit(graphics2d, (int)(amxdBm), (k + i/2) + 110, (int)(l + (j/18.0D)*6.0D) - 5, 1, "");
+		drawUnit(graphics2d, (int)(getDisplayedPeakDbm()), (k + i/2) + 110, (int)(l + (j/18.0D)*6.0D) - 5, 1, "");
 		drawUnit(graphics2d, (int)(f1dBm), (k + i/2) + 110, (int)(l + (j/18.0D)*10.0D) - 5, 1, "");
 		drawUnit(graphics2d, (int)(f2dBm), (k + i/2) + 110, (int)(l + (j/18.0D)*14.0D) - 5, 1, "");
 		
@@ -618,7 +694,7 @@ class PRPDGraph extends JComponent implements Printable
 		graphics2d.fillRect((int)(i/80.0D)*3, (int)((j/18.0D)*3.0D), avr, (int)(j/18.0D)*1);
 		//drawUnit(graphics2d, (int)((avrdBm)/0.9), (k + i/2) + 110, (l + (j/18)*2) - 5, 1, "");
 		
-		graphics2d.setPaint(new Color(d3p.zColor_Ultral(GisSignal.dBm2Int(amxdBm))));
+		graphics2d.setPaint(new Color(d3p.zColor_Ultral(GisSignal.dBm2Int(getDisplayedPeakDbm()))));
 		graphics2d.fillRect((int)(i/80.0D)*3, (int)((j/18.0D)*7.0D), max, (int)(j/18.0D)*1);
 		//drawUnit(graphics2d, (int)(amxdBm), (k + i/2) + 110, (l + (j/18)*6) - 5, 1, "");
 		
@@ -659,9 +735,19 @@ class PRPDGraph extends JComponent implements Printable
 		graphics2d.drawString("0",(int)((i/200.0D)*10.0D),(int)((j/140.0D)*75.0D));
 		graphics2d.drawString("-35 mV",(int)((i/200.0D)*0.0D),(int)((j/140.0D)*90.0D));
 		graphics2d.drawString("-70 mV",(int)((i/200.0D)*0.0D),(int)((j/140.0D)*110.0D));
-		graphics2d.drawString("-105 mV",(int)((i/200.0D)*0.0D),(int)((j/140.0D)*130.0D));
-		drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, l + 20, 1, ChooseLang.M[400]);
-		//drawUnit(graphics2d, movestep, k+110, (l + (j/18)*2) - 20, 1, "");//测试步进		
+		if (persistentPeakMode)
+		{
+			if (persistentPeakReady && !Double.isNaN(persistentPeakDbm))
+			{
+				drawUnitDouble(graphics2d, persistentPeakDbm, (k + i) - 4, l + 20, 1, ChooseLang.M[400], false, 0);
+			} else
+			{
+				drawUnitString(graphics2d, ChooseLang.M[400] + "--", (k + i) - 4, l + 20, 1);
+			}
+		} else
+		{
+			drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, l + 20, 1, ChooseLang.M[400]);
+		}		
 		
 		graphics2d.setPaint(Option.gt ? ((java.awt.Paint) (Color.DARK_GRAY)) : ((java.awt.Paint) (Color.LIGHT_GRAY)));
 								
@@ -818,8 +904,21 @@ class PRPDGraph extends JComponent implements Printable
 		//graphics2d.setPaint(Option.gt ? ((java.awt.Paint) (new Color(0x23B14D))) : ((java.awt.Paint) (new Color(0xDC4EB2))));
 		graphics2d.drawPolyline(x, y, 65);//绘制折线
 		
-		//if (GisXYZ.realTab == 0)
-		drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, (l + 55) - 15, 1, ChooseLang.M[400], drawchange, unitfault);
+		boolean usePersistentPeak = (persistentPeakMode || AppGlobalConfig.isSpectrogramPeakFollowFiltered())
+				&& AppGlobalConfig.isPersistentPeakEnabled();
+		if (usePersistentPeak)
+		{
+			if (persistentPeakReady && !Double.isNaN(persistentPeakDbm))
+			{
+				drawUnitDouble(graphics2d, persistentPeakDbm, (k + i) - 4, (l + 55) - 15, 1, ChooseLang.M[400], drawchange, unitfault);
+			} else
+			{
+				drawUnitString(graphics2d, ChooseLang.M[400] + "--", (k + i) - 4, (l + 55) - 15, 1);
+			}
+		} else
+		{
+			drawUnit(graphics2d, (int)(amxdBm - 0.5D), (k + i) - 4, (l + 55) - 15, 1, ChooseLang.M[400], drawchange, unitfault);
+		}
 		
 		drawOutlineString(graphics2d, stringToDraw, k + 4, l + 15, Color.yellow, Color.black);
 	}

@@ -411,9 +411,9 @@ public class Lang_ko_KR extends ListResourceBundle {
 			,{"398",""}
 			,{"399",""},{"400","Max"},{"401","Avg"},{"402","amplitude"},{"403","phase"},{"404","time"},
 			{"405","Select 100 (Single Select only)"},{"406","Check All"},{"407","Uncheck All"},
-			{"408","Start continuous data acquisition"},{"409","Acquire one screen of data"},{"410","Please select a start timestamp"}
-
-
+			{"408","Start continuous data acquisition"},{"409","Acquire one screen of data"},{"410","Please select a start timestamp"},
+			{"411","지속 테스트"},{"412","수집 대기"},{"413","예열"},{"414","초기화"},{"415","지속 테스트 중"},
+			{"416","결과 유지"},{"417","지속 피크"},{"418","CSV 오류"},{"419","트렌드 차트 열기"}
 	};
 	
 	protected Object[][] getContents() {

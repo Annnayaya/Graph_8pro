@@ -7,6 +7,8 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 import javax.swing.BorderFactory;
 import javax.swing.border.Border;
@@ -28,6 +30,8 @@ class GisGUI
 	JPanel prpsFrame[];
 	JPanel prpdFrame[];//mana-PRPD绘制区域
 	JPanel chCPanel[];
+	public JPanel prpsControlPanels[];
+	public JPanel prpdControlPanels[];
 	JPanel description[];
 	JLabel ph_jlabel[];//相位
 	JLabel ga_jlabel[];//增益
@@ -35,6 +39,7 @@ class GisGUI
 	JLabel trglabel[];//优先触发
 	MemoPanel memoPanel;//mana-界面左下当前时间
 	HbDesktopPane dp;
+	public AlarmPanel alarmPanel;
 	int chno;
 	int drawcnt;
 	JToggleButton suspendButtonPRPS[];
@@ -960,16 +965,18 @@ class GisGUI
 
 
 		JPanel jpanel1 = new JPanel(new BorderLayout());
-		//full = new JFrame((new StringBuilder()).append(ChooseLang.M[1]).append(GisXYZ.addr).append(" )").toString());
-		full = new JFrame((new StringBuilder()).append(ChooseLang.M[1]).toString());//设置框架标题
+		String appTitle = (ChooseLang.M[1] != null && !ChooseLang.M[1].trim().isEmpty()) ? ChooseLang.M[1] : "Graph_8Pro";
+		full = new JFrame(appTitle);//设置框架标题
 		try
 		{
-			full.setIconImage(ImageIO.read(new File("pics/Logo1.png")));
-			//full.setIconImage(ImageIO.read(new File("pics/icon_128.png")));
+			List<Image> appIcons = loadAppIcons();
+			if (appIcons != null && !appIcons.isEmpty()) {
+				full.setIconImages(appIcons);
+				full.setIconImage(appIcons.get(appIcons.size() > 2 ? 2 : 0));
+			}
 		}
-		catch (Exception exception)
+		catch (Exception ignored)
 		{
-			exception.printStackTrace();
 		}
 		dp = new HbDesktopPane(this);
 		memoPanel = new MemoPanel(gismmi);
@@ -987,6 +994,8 @@ class GisGUI
 		prpd = new PRPDGraph[chno];
 		prpdFrame = new JPanel[chno];
 		chCPanel = new JPanel[8];
+		prpsControlPanels = new JPanel[8];
+		prpdControlPanels = new JPanel[8];
 		description = new JPanel[8];//滑动条描述
 		prpdjpanel = new JPanel[chno];
 		getObject = new Object[chno];//单位选择对象
@@ -1317,6 +1326,7 @@ class GisGUI
 		});
 		jpanel2.add(suspendButtonPRPS[i]);
 		prpsFrame[i].add(jpanel2, "South");
+		prpsControlPanels[i] = jpanel2;
 
 		jpanel4.setBorder(new EtchedBorder(1));
 		prpd[i] = new PRPDGraph(64, 64, gismmi.gdp.gd.rtb[i].dispPRPD, gismmi.gdp.gd.buffer_utral[i]);
@@ -1767,6 +1777,7 @@ class GisGUI
 		}
 		*/
 		prpdFrame[i].add(jpanel3, "South");
+		prpdControlPanels[i] = jpanel3;
 		jpanel5.setBorder(new EtchedBorder(1));
 		chCPanel[i] = new JPanel(new GridLayout(3, 2));//3行、2列
 		chCPanel[i].setBorder(BorderFactory.createEtchedBorder());
@@ -1926,13 +1937,29 @@ class GisGUI
 		}
 		fullPane.setFont(GisXYZ.fontG);
 		fullPane.addTab(ChooseLang.M[21], jpanel);//实时
-		fullPane.addTab(ChooseLang.M[28], gismmi.ge);//数据浏览器
+		if (LicenseManager.isLicensed()) {
+			fullPane.addTab(ChooseLang.M[28], gismmi.ge);//数据浏览器
+			alarmPanel = new AlarmPanel();
+			if (AppGlobalConfig.isAlarmEnabled()) {
+				fullPane.addTab("幅值报警", alarmPanel); // 数据浏览器旁边
+			}
+		}
 		//fullPane.addTab("测试", scan);
 		//fullPane.setTabPlacement(fullPane.LEFT);
 		//fullPane.setBackground(Color.LIGHT_GRAY);
 		//fullPane.setForeground(Color.BLUE);
 		full.add(fullPane);
-		full.setDefaultCloseOperation(3);
+		full.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+		full.addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) {
+				if (gm != null) {
+					gm.shutdownApplication();
+				} else {
+					System.exit(0);
+				}
+			}
+		});
 		full.setLocationByPlatform(true);
 		//full.setLocation((sd.width - java.awt.Toolkit.getDefaultToolkit().getScreenSize().width) / 2, (sd.height - java.awt.Toolkit.getDefaultToolkit().getScreenSize().height) / 2);
 		//full.setLocation((java.awt.Toolkit.getDefaultToolkit().getScreenSize().width - full.getWidth()) / 2, (java.awt.Toolkit.getDefaultToolkit().getScreenSize().height - taskHeight - full.getHeight()) / 2);
@@ -1949,7 +1976,102 @@ class GisGUI
 
 		dp.shownCh();//初始化上次已选择的通道
 		//dp.showAllWindows();//初始化显示所有通道
+		AlarmService.getInstance().registerUiComponents(prpsFrame, prpdFrame, dp.jbutton1, prpsControlPanels, prpdControlPanels, chCPanel, prps, prpd);
+
+		if (gismmi != null && gismmi.gdp != null && gismmi.gdp.gd != null && gismmi.gdp.gd.persistentPeakService != null) {
+			gismmi.gdp.gd.persistentPeakService.addListener(this::applyPersistentPeakSnapshot);
+			if (AppGlobalConfig.isPersistentPeakEnabled()) {
+				setPersistentPeakMode(true);
+				new Thread(() -> {
+					try {
+						PersistentPeakConfig cfg = PersistentPeakConfig.loadOrDefault();
+						PersistentPeakSession session = PersistentPeakSession.create(cfg);
+						gismmi.gdp.gd.persistentPeakService.startSession(session);
+					} catch (Exception ex) {
+						ex.printStackTrace();
+					}
+				}, "AutoStartPersistentPeakSession").start();
+			}
 		}
+	}
+
+	public void applyPersistentPeakSnapshot(final PersistentPeakSnapshot snapshot) {
+		if (!SwingUtilities.isEventDispatchThread()) {
+			SwingUtilities.invokeLater(() -> applyPersistentPeakSnapshot(snapshot));
+			return;
+		}
+		if (snapshot == null) return;
+		for (int i = 0; i < chno; i++) {
+			if (prps != null && i < prps.length && prps[i] != null) {
+				prps[i].applyPersistentPeak(snapshot, i);
+				if (AppGlobalConfig.isSpectrogramPeakFollowFiltered() && snapshot.isValid(i)) {
+					double val = snapshot.getPublishedDbm(i);
+					if (!Double.isNaN(val)) {
+						prps[i].amxdBm = val;
+					}
+				}
+			}
+			if (prpd != null && i < prpd.length && prpd[i] != null) {
+				prpd[i].applyPersistentPeak(snapshot, i);
+				if (AppGlobalConfig.isSpectrogramPeakFollowFiltered() && snapshot.isValid(i)) {
+					double val = snapshot.getPublishedDbm(i);
+					if (!Double.isNaN(val)) {
+						prpd[i].amxdBm = val;
+					}
+				}
+			}
+		}
+		if (dp != null) {
+			dp.updatePersistentTestState(snapshot);
+		}
+		for (int i = 0; i < chno; i++) {
+			if (prps != null && i < prps.length && prps[i] != null) {
+				prps[i].repaint();
+			}
+			if (prpd != null && i < prpd.length && prpd[i] != null) {
+				prpd[i].repaint();
+			}
+		}
+		checkAlarms();
+	}
+
+	public void checkAlarms() {
+		if (prps == null) return;
+		double[] amps = new double[chno];
+		String[] names = new String[chno];
+		boolean[] enabled = new boolean[chno];
+		for (int i = 0; i < chno; i++) {
+			amps[i] = (prps[i] != null) ? prps[i].amxdBm : Double.NaN;
+			names[i] = (strlabelname != null && i < strlabelname.length && strlabelname[i] != null && strlabelname[i].getText() != null)
+					? strlabelname[i].getText() : ("CH" + (i + 1));
+			enabled[i] = (suspendButtonPRPS != null && i < suspendButtonPRPS.length && suspendButtonPRPS[i] != null)
+					? !suspendButtonPRPS[i].isSelected() : true;
+			if (alarmPanel != null) {
+				alarmPanel.updateChannelCurrentValue(i, amps[i]);
+			}
+		}
+		boolean isAcq = dp != null && dp.conButton1 != null && dp.conButton1.isSelected();
+		AlarmService.getInstance().checkAlarms(amps, names, enabled, isAcq);
+	}
+
+	public void setPersistentPeakMode(boolean enabled) {
+		if (!SwingUtilities.isEventDispatchThread()) {
+			SwingUtilities.invokeLater(() -> setPersistentPeakMode(enabled));
+			return;
+		}
+		for (int i = 0; i < chno; i++) {
+			if (prps != null && i < prps.length && prps[i] != null) {
+				prps[i].setPersistentPeakMode(enabled);
+				if (!enabled) prps[i].clearPersistentPeak();
+				prps[i].repaint();
+			}
+			if (prpd != null && i < prpd.length && prpd[i] != null) {
+				prpd[i].setPersistentPeakMode(enabled);
+				if (!enabled) prpd[i].clearPersistentPeak();
+				prpd[i].repaint();
+			}
+		}
+	}
 
 	//这里双击使用
 	public Boolean getOldclick() {
@@ -1958,5 +2080,147 @@ class GisGUI
 
 	public void setOldclick(Boolean oldclick) {
 		this.oldclick = oldclick;
+	}
+
+	private static List<Image> loadAppIcons() {
+		List<Image> icons = new ArrayList<Image>();
+		int[] resolutions = new int[] { 16, 24, 32, 48, 64, 128 };
+		
+		// 1. 最优先：从 JAR 包内部类路径读取多分辨率 PNG (100% 自包含，任何路径与打包方式均生效)
+		for (int res : resolutions) {
+			try (java.io.InputStream in = GisGUI.class.getResourceAsStream("/Graphico_" + res + "x" + res + ".png")) {
+				if (in != null) {
+					java.awt.image.BufferedImage img = ImageIO.read(in);
+					if (img != null) {
+						icons.add(img);
+					}
+				}
+			} catch (Exception ignored) {}
+		}
+		if (icons.isEmpty()) {
+			try (java.io.InputStream in = GisGUI.class.getResourceAsStream("/Graphico_32x32.png")) {
+				if (in != null) {
+					java.awt.image.BufferedImage img = ImageIO.read(in);
+					if (img != null) icons.add(img);
+				}
+			} catch (Exception ignored) {}
+		}
+		if (icons.isEmpty()) {
+			try (java.io.InputStream in = GisGUI.class.getResourceAsStream("/Graphico_32x32.ico")) {
+				if (in != null) {
+					java.awt.image.BufferedImage img = decodeIcoStream(in);
+					if (img != null) icons.add(img);
+				}
+			} catch (Exception ignored) {}
+		}
+
+		// 2. 磁盘文件优先：检查当前运行目录或根目录下的各分辨率图标
+		if (icons.isEmpty()) {
+			for (int res : resolutions) {
+				File f = new File("Graphico_" + res + "x" + res + ".png");
+				if (f.exists()) {
+					try {
+						java.awt.image.BufferedImage img = ImageIO.read(f);
+						if (img != null) icons.add(img);
+					} catch (Exception ignored) {}
+				}
+			}
+		}
+		if (icons.isEmpty()) {
+			File icoFile = new File("Graphico_32x32.ico");
+			if (icoFile.exists()) {
+				Image img = decodeIcoFile(icoFile);
+				if (img != null) icons.add(img);
+			}
+		}
+		if (icons.isEmpty()) {
+			File pngRootFile = new File("Graphico_32x32.png");
+			if (pngRootFile.exists()) {
+				try {
+					java.awt.image.BufferedImage img = ImageIO.read(pngRootFile);
+					if (img != null) icons.add(img);
+				} catch (Exception ignored) {}
+			}
+		}
+
+		// 3. 备选读取 pics 目录
+		if (icons.isEmpty()) {
+			File[] picsCandidates = new File[] {
+				new File("pics/icon_128.png"),
+				new File("pics/Logo1.png")
+			};
+			for (File f : picsCandidates) {
+				if (f.exists()) {
+					try {
+						java.awt.image.BufferedImage img = ImageIO.read(f);
+						if (img != null) {
+							icons.add(img);
+							break;
+						}
+					} catch (Exception ignored) {}
+				}
+			}
+		}
+
+		return icons;
+	}
+
+	private static java.awt.image.BufferedImage decodeIcoStream(java.io.InputStream in) {
+		try {
+			java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+			byte[] temp = new byte[4096];
+			int len;
+			while ((len = in.read(temp)) != -1) {
+				baos.write(temp, 0, len);
+			}
+			return decodeIcoBytes(baos.toByteArray());
+		} catch (Exception ignored) {}
+		return null;
+	}
+
+	private static Image decodeIcoFile(File file) {
+		try (java.io.DataInputStream in = new java.io.DataInputStream(new java.io.FileInputStream(file))) {
+			byte[] bytes = new byte[(int) file.length()];
+			in.readFully(bytes);
+			return decodeIcoBytes(bytes);
+		} catch (Exception ignored) {}
+		return null;
+	}
+
+	private static java.awt.image.BufferedImage decodeIcoBytes(byte[] bytes) {
+		try {
+			java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+			short type = buf.getShort(2);
+			short count = buf.getShort(4);
+			if (type != 1 || count < 1) return null;
+			int offset = buf.getInt(18);
+			if (offset < 0 || offset >= bytes.length) return null;
+			// 检查是否为 PNG 封装的 ICO
+			if (bytes.length > offset + 4 && bytes[offset] == (byte) 0x89 && bytes[offset + 1] == (byte) 0x50) {
+				return ImageIO.read(new java.io.ByteArrayInputStream(bytes, offset, bytes.length - offset));
+			}
+			// BMP 封装的 32 位 ARGB ICO
+			if (bytes.length >= offset + 40) {
+				int biWidth = buf.getInt(offset + 4);
+				int biHeight = buf.getInt(offset + 8) / 2;
+				short bitCount = buf.getShort(offset + 14);
+				if (bitCount == 32 && biWidth > 0 && biHeight > 0) {
+					java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(biWidth, biHeight, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+					int pixelOffset = offset + 40;
+					for (int y = biHeight - 1; y >= 0; y--) {
+						for (int x = 0; x < biWidth; x++) {
+							if (pixelOffset + 3 >= bytes.length) break;
+							int b = bytes[pixelOffset++] & 0xFF;
+							int g = bytes[pixelOffset++] & 0xFF;
+							int r = bytes[pixelOffset++] & 0xFF;
+							int a = bytes[pixelOffset++] & 0xFF;
+							img.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
+						}
+					}
+					return img;
+				}
+			}
+		} catch (Exception ignored) {}
+		return null;
 	}
 }

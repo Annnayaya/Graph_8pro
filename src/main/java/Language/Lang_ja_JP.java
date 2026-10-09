@@ -411,8 +411,9 @@ public class Lang_ja_JP extends ListResourceBundle {
 			,{"398",""}
 			,{"399",""},{"400","Max"},{"401","Avg"},{"402","amplitude"},{"403","phase"},{"404","time"},
 			{"405","Select 100 (Single Select only)"},{"406","Check All"},{"407","Uncheck All"},
-			{"408","Start continuous data acquisition"},{"409","Acquire one screen of data"},{"410","Please select a start timestamp"}
-
+			{"408","Start continuous data acquisition"},{"409","Acquire one screen of data"},{"410","Please select a start timestamp"},
+			{"411","持続テスト"},{"412","取得待機"},{"413","予熱"},{"414","初期化"},{"415","持続テスト中"},
+			{"416","結果保持"},{"417","持続ピーク"},{"418","CSV書込異常"},{"419","トレンド図を開く"}
 	};
 	
 	protected Object[][] getContents() {

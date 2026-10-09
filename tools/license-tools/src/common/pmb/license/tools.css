@@ -1,0 +1,17 @@
+.root { -fx-font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; -fx-font-size: 14px; -fx-background-color: #f4f6fa; -fx-text-fill: #17243a; }
+.brand { -fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #4670a9; }
+.heading { -fx-font-size: 26px; -fx-font-weight: bold; -fx-text-fill: #14263e; }
+.muted { -fx-text-fill: #61718a; -fx-font-size: 13px; }
+.card { -fx-background-color: white; -fx-background-radius: 12px; -fx-padding: 22px; -fx-border-color: #dfe6ef; -fx-border-radius: 12px; }
+.button { -fx-padding: 10px 16px; -fx-cursor: hand; -fx-background-radius: 7px; -fx-font-weight: bold; }
+.primary { -fx-background-color: #245fc5; -fx-text-fill: white; }
+.primary:hover { -fx-background-color: #184ba4; }
+.secondary { -fx-background-color: white; -fx-text-fill: #28456b; -fx-border-color: #cdd7e5; -fx-border-radius: 7px; }
+.secondary:hover { -fx-background-color: #eaf0f8; }
+.text-field { -fx-background-color: white; -fx-border-color: #cad5e3; -fx-border-radius: 6px; -fx-background-radius: 6px; -fx-padding: 10px; }
+.text-field:focused { -fx-border-color: #245fc5; }
+.table-view { -fx-background-color: white; -fx-border-color: #dfe6ef; -fx-border-radius: 9px; -fx-padding: 1px; }
+.table-view .column-header, .table-view .filler { -fx-background-color: #eaf0f8; -fx-size: 42px; }
+.table-row-cell { -fx-cell-size: 38px; }
+.table-row-cell:selected { -fx-background-color: #dce9ff; -fx-text-background-color: #143b70; }
+.status { -fx-background-color: #e9f0fc; -fx-padding: 12px; -fx-background-radius: 8px; -fx-text-fill: #264a7b; }

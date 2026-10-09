@@ -3,7 +3,7 @@
   <groupId>com.ZMpd8ch.app</groupId>
   <artifactId>gis-app-8CH</artifactId>
   <version>0.0.1-SNAPSHOT</version>
-  <name>gis-app-8CH</name>
+  <name>Graph_8Pro</name>
   <url>http://maven.apache.org</url>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

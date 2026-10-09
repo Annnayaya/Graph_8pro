@@ -1,0 +1,10 @@
+/build/
+/dist/
+/dist-next/
+/dist-autoload-1.2/
+/running-previous-version/
+/dist-swing-backup/
+/dist-javafx-1.1-backup/
+/private/
+*.vault
+*.prop

@@ -81,19 +81,28 @@ class Database implements TreeNode
 
 	public void getAvailableSites()
 	{
-		String as[] = (new File(SiteData.pathName)).list();
-		int j;
-		if (as != null)
-			j = as.length;
-		else
-			j = 0;
-		SiteData asitedata[] = new SiteData[j];
+		File dataDir = new File(SiteData.pathName);
+		File[] files = dataDir.listFiles();
 		ArrayList<SiteData> arraylist = new ArrayList<SiteData>();
-		for (int i = 0; i < j; i++)
+		if (files != null)
 		{
-			asitedata[i] = SiteData.load(as[i]);
-			arraylist.add(asitedata[i]);
-			System.out.println((new StringBuilder()).append(asitedata[i].siteName).append(" : ").append(asitedata[i].savedDay.length).toString());
+			for (File f : files)
+			{
+				if (!f.isDirectory()) continue;
+				String name = f.getName();
+				if (name.equalsIgnoreCase("alarm") ||
+				    name.equalsIgnoreCase("reportdata") ||
+				    name.equalsIgnoreCase("report") ||
+				    name.equalsIgnoreCase("persistent_peak") ||
+				    name.startsWith(".")) {
+					continue;
+				}
+				SiteData sitedata = SiteData.load(name);
+				if (sitedata != null) {
+					arraylist.add(sitedata);
+					System.out.println((new StringBuilder()).append(sitedata.siteName).append(" : ").append(sitedata.savedDay != null ? sitedata.savedDay.length : 0).toString());
+				}
+			}
 		}
 
 		sites = arraylist;

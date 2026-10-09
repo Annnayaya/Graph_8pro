@@ -188,18 +188,30 @@ class SiteData implements TreeNode
 	public void reloadDayList()
 	{
 		File file = new File((new StringBuilder()).append(pathName).append(this.siteName).toString());
+		if (!file.exists() || !file.isDirectory()) {
+			this.savedDay = new long[0];
+			return;
+		}
 		String[] as3 = file.list();
+		if (as3 == null || as3.length == 0) {
+			this.savedDay = new long[0];
+			return;
+		}
 		int i2 = as3.length;
 		int i1 = 0;
-		//boolean flag = false;
-		String[] as1 = new String[0];
 		for (int j1 = 0; j1 < i2; j1++)
 		{
-			as1 = (new File((new StringBuilder()).append(pathName).append(this.siteName).append(File.separator).append(as3[j1]).toString())).list();
-			int k = as1.length;
-			for (int i = 0; i < k; i++){
-				if (as1[i].endsWith(".ghd") && getLongFromDateStr(as1[i]) > 0L){
-					i1++;
+			File subDir = new File((new StringBuilder()).append(pathName).append(this.siteName).append(File.separator).append(as3[j1]).toString());
+			if (subDir.isDirectory())
+			{
+				String[] as1 = subDir.list();
+				if (as1 != null) {
+					int k = as1.length;
+					for (int i = 0; i < k; i++){
+						if (as1[i] != null && as1[i].endsWith(".ghd") && getLongFromDateStr(as1[i]) > 0L){
+							i1++;
+						}
+					}
 				}
 			}
 		}
@@ -208,14 +220,20 @@ class SiteData implements TreeNode
 		i1 = -1;
 		for (int k1 = 0; k1 < i2; k1++)
 		{
-			String as2[] = (new File((new StringBuilder()).append(pathName).append(this.siteName).append(File.separator).append(as3[k1]).toString())).list();
-			int l = as2.length;
-			for (int j = 0; j < l; j++)
+			File subDir = new File((new StringBuilder()).append(pathName).append(this.siteName).append(File.separator).append(as3[k1]).toString());
+			if (subDir.isDirectory())
 			{
-				if (as2[j].endsWith(".ghd")){
-				long l1 = getLongFromDateStr(as2[j]);
-				if (l1 > 0L){
-					this.savedDay[++i1] = l1;
+				String[] as2 = subDir.list();
+				if (as2 != null) {
+					int l = as2.length;
+					for (int j = 0; j < l; j++)
+					{
+						if (as2[j] != null && as2[j].endsWith(".ghd")){
+							long l1 = getLongFromDateStr(as2[j]);
+							if (l1 > 0L && ++i1 < this.savedDay.length){
+								this.savedDay[i1] = l1;
+							}
+						}
 					}
 				}
 			}

@@ -51,6 +51,11 @@ class GisChannelData
 	int Rmf[];//n次谐波
 	static double pi = 3.1415926d;
 
+	public final PersistentPeakService persistentPeakService = new PersistentPeakService();
+	private final int[] currentCyclePeakRaw = new int[8];
+	private final int[] cachedGain = new int[8];
+	private final boolean[] cachedEnabled = new boolean[8];
+
 	public GisChannelData(int i, GisXYZ gismmi)
 	{
 		chNo = 8;
@@ -156,6 +161,7 @@ class GisChannelData
 					i4 = k3;//最大值
 				ii[i][k] = k3;				
 			}
+			currentCyclePeakRaw[i] = i4;
 			//i5 = find_sec_max(ii[i],64);
 			//dft(ii[i], 64);
 
@@ -385,13 +391,16 @@ class GisChannelData
 			//PRPS平均值
 			mmi.gui.prps[i].avrdBm = (double)((l3 /5120D) *(GisSignal.calMax_dBm - GisSignal.calMin_dBm)) / 4095D + (double)GisSignal.calMin_dBm + mmi.gui.gainScrollBar[i].getValue();
 			//PRPS最大值
-			mmi.gui.prps[i].amxdBm = (double)(i4 * (GisSignal.calMax_dBm - GisSignal.calMin_dBm)) / 4095D + (double)GisSignal.calMin_dBm + mmi.gui.gainScrollBar[i].getValue();
-			//有效值
-			//mmi.gui.prps[i].effdBm = (double)(eff /64.0D* (GisSignal.calMax_dBm - GisSignal.calMin_dBm)) / 4095D + (double)GisSignal.calMin_dBm + mmi.gui.gainScrollBar[i].getValue();
-			mmi.gui.prps[i].effdBm = (double)(eff * (GisSignal.calMax_dBm - GisSignal.calMin_dBm)) / 4095D + (double)GisSignal.calMin_dBm + mmi.gui.gainScrollBar[i].getValue();
-			
-			//PRPD5个周波最大值
-			mmi.gui.prpd[i].amxdBm = mmi.gui.prps[i].amxdBm + mmi.gui.gainScrollBar[i].getValue();
+			double rawPrpsMax = (double)(i4 * (GisSignal.calMax_dBm - GisSignal.calMin_dBm)) / 4095D + (double)GisSignal.calMin_dBm + mmi.gui.gainScrollBar[i].getValue();
+			PersistentPeakSnapshot snap = persistentPeakService != null ? persistentPeakService.getLastSnapshot() : null;
+			if (AppGlobalConfig.isSpectrogramPeakFollowFiltered() && snap != null && snap.isValid(i) && !Double.isNaN(snap.getPublishedDbm(i))) {
+				mmi.gui.prps[i].amxdBm = snap.getPublishedDbm(i);
+				mmi.gui.prpd[i].amxdBm = snap.getPublishedDbm(i);
+			} else {
+				mmi.gui.prps[i].amxdBm = rawPrpsMax;
+				//PRPD5个周波最大值
+				mmi.gui.prpd[i].amxdBm = mmi.gui.prps[i].amxdBm + mmi.gui.gainScrollBar[i].getValue();
+			}
 			max_utral[i] = (double)(i44 * (GisSignal.calMax_dBm - GisSignal.calMin_dBm)) / 4095D + (double)GisSignal.calMin_dBm;;//峰值
 			mmi.gui.prpd[i].avrdBm = mmi.gui.prps[i].avrdBm + mmi.gui.gainScrollBar[i].getValue();//有效值
 			mmi.gui.prpd[i].Countprpd = rtb[i].Countprpd;//放电次数
@@ -415,64 +424,173 @@ class GisChannelData
 			phaseShift[i] = -mmi.gui.phaseScrollBar[i].getValue();
 			denoise2[i] = mmi.gui.noisegate[i].isSelected();
 		}
-		
-		switch (++cnt & 7)
+
+		if (mmi != null && mmi.gui != null)
 		{
-		case 0: // '\0'
-		case 2: // '\002'
-		case 4: // '\004'
-		case 6: // '\006'                
-			//int j = cnt >> 1 & 3;//mana-{1-4通道}
-			int j = cnt >> 1 & 7;//mana-{1-8通道}
-			if (!mmi.gui.suspendButtonPRPS[j].isSelected())
+			mmi.gui.checkAlarms();
+		}
+
+		if (persistentPeakService != null && mmi != null && mmi.gui != null && AppGlobalConfig.isPersistentPeakEnabled())
+		{
+			for (int j = 0; j < chNo; j++)
 			{
-				System.arraycopy(buffer2[j], 0, bufferd[j], 0, 5120);
-				System.arraycopy(buffer2[j], 5056, bufferdf1[j], 0, 64);
-				//System.arraycopy(buffer_utral[j], 0, buffer_640[j], 0, 640);
-				System.arraycopy(buffer2[j], 4480, buffer_utral[j], 0, 640);
-				
-				int k = 0;
-				int k1 = 0;
-				int n = 576;
-								
-				for(; ;)
-				{					
-					buffer_640[j][k1++] = buffer_utral[j][n];
-					n++;
-					if(n > 640 - 64 * k - 1)
+				if (mmi.gui.gainScrollBar != null && j < mmi.gui.gainScrollBar.length && mmi.gui.gainScrollBar[j] != null)
+				{
+					cachedGain[j] = mmi.gui.gainScrollBar[j].getValue();
+				} else {
+					cachedGain[j] = 0;
+				}
+				if (mmi.gui.suspendButtonPRPS != null && j < mmi.gui.suspendButtonPRPS.length && mmi.gui.suspendButtonPRPS[j] != null)
+				{
+					cachedEnabled[j] = !mmi.gui.suspendButtonPRPS[j].isSelected();
+				} else {
+					cachedEnabled[j] = true;
+				}
+			}
+			boolean gap = GisUDP.hasPacketGap;
+			if (gap)
+			{
+				GisUDP.hasPacketGap = false;
+			}
+			PeakMeasurementContext context = new PeakMeasurementContext(
+					GisSignal.calMin_dBm,
+					GisSignal.calMax_dBm,
+					cachedGain,
+					cachedEnabled,
+					freq,
+					gap,
+					System.currentTimeMillis()
+			);
+			persistentPeakService.acceptCyclePeaks(currentCyclePeakRaw, context);
+		}
+		
+		if (AppGlobalConfig.isSpectrogramRollingEnabled())
+		{
+			for (int j = 0; j < chNo; j++)
+			{
+				if (!mmi.gui.suspendButtonPRPS[j].isSelected())
+				{
+					// 1. 3D绘图数据 FIFO 前移 1 个周波 (64点)
+					System.arraycopy(bufferd[j], 64, bufferd[j], 0, 5056);
+
+					// 2. 将当前最新周波数据经过阈值去噪与相位偏置计算后，填充到末尾 (5056..5119)
+					int j3 = denoiser.gdOffset[j];
+					int l2 = phaseShift[j];
+					for (int p = 0; p < 64; p++)
 					{
-						k++;
-						if(k > 9)
-							break;
-						n = 576 - 64 * k;
+						int rawVal = ai[j][p];
+						int j6 = rawVal - j3;
+						if (j6 < 0) j6 = 0;
+						if (j3 < 4095) j6 = (4095 * j6) / (4095 - j3);
+						bufferd[j][5056 + (p + l2) % 64] = j6;
+					}
+
+					System.arraycopy(bufferd[j], 0, buffer2[j], 0, 5120);
+					System.arraycopy(buffer2[j], 5056, bufferdf1[j], 0, 64);
+					System.arraycopy(buffer2[j], 4480, buffer_utral[j], 0, 640);
+
+					int k = 0;
+					int k1 = 0;
+					int n = 576;
+					for(; ;)
+					{
+						buffer_640[j][k1++] = buffer_utral[j][n];
+						n++;
+						if(n > 640 - 64 * k - 1)
+						{
+							k++;
+							if(k > 9)
+								break;
+							n = 576 - 64 * k;
+						}
 					}
 				}
-				
-			}
-			if (!mmi.gui.suspendButtonPRPD[j].isSelected())
-			{
-				rtb[j].rtbProc();
-				fb[j].fbpro();
-			}
-			an[j].gaProc(offset[j], ioffset[j], j);
-			pb[j].gpbProc(an[j]);
-			if (denoise2[j])
-			{
-				if (an[j].sig_cnt + denoiser.gatedSignal[j] > 30)
-					mmi.gui.prps[j].stringToDraw2 = (new StringBuilder()).append((int)(((float)denoiser.gatedSignal[j] * 100F) / (float)(an[j].sig_cnt + denoiser.gatedSignal[j]))).append("% ").append(ChooseLang.M[237]).toString();//����
-				else
-					mmi.gui.prps[j].stringToDraw2 = ChooseLang.M[200];//mana-0%门限
-				
-			} else
-			{
-				mmi.gui.prps[j].stringToDraw2 = "";
-			}
-			break;
 
-		case 7: // '\007'
-			offset = denoiser.gdProc(buffer1, buffer2, buffer_utral, denoise1, denoise2, chNo - 1, phaseShift, currentCycle, false);
+				if (!mmi.gui.suspendButtonPRPD[j].isSelected())
+				{
+					rtb[j].rtbProc();
+					fb[j].fbpro();
+				}
+				an[j].gaProc(offset[j], ioffset[j], j);
+				pb[j].gpbProc(an[j]);
+				if (denoise2[j])
+				{
+					if (an[j].sig_cnt + denoiser.gatedSignal[j] > 30)
+						mmi.gui.prps[j].stringToDraw2 = (new StringBuilder()).append((int)(((float)denoiser.gatedSignal[j] * 100F) / (float)(an[j].sig_cnt + denoiser.gatedSignal[j]))).append("% ").append(ChooseLang.M[237]).toString();
+					else
+						mmi.gui.prps[j].stringToDraw2 = ChooseLang.M[200];
+				} else
+				{
+					mmi.gui.prps[j].stringToDraw2 = "";
+				}
+			}
+
+			if ((++cnt & 7) == 7)
+			{
+				offset = denoiser.gdProc(buffer1, buffer2, buffer_utral, denoise1, denoise2, chNo - 1, phaseShift, currentCycle, false);
+			}
 			GisXYZ.refresh = true;
-			break;
+		}
+		else
+		{
+			switch (++cnt & 7)
+			{
+			case 0: // '\0'
+			case 2: // '\002'
+			case 4: // '\004'
+			case 6: // '\006'                
+				//int j = cnt >> 1 & 3;//mana-{1-4通道}
+				int j = cnt >> 1 & 7;//mana-{1-8通道}
+				if (!mmi.gui.suspendButtonPRPS[j].isSelected())
+				{
+					System.arraycopy(buffer2[j], 0, bufferd[j], 0, 5120);
+					System.arraycopy(buffer2[j], 5056, bufferdf1[j], 0, 64);
+					//System.arraycopy(buffer_utral[j], 0, buffer_640[j], 0, 640);
+					System.arraycopy(buffer2[j], 4480, buffer_utral[j], 0, 640);
+					
+					int k = 0;
+					int k1 = 0;
+					int n = 576;
+									
+					for(; ;)
+					{					
+						buffer_640[j][k1++] = buffer_utral[j][n];
+						n++;
+						if(n > 640 - 64 * k - 1)
+						{
+							k++;
+							if(k > 9)
+								break;
+							n = 576 - 64 * k;
+						}
+					}
+					
+				}
+				if (!mmi.gui.suspendButtonPRPD[j].isSelected())
+				{
+					rtb[j].rtbProc();
+					fb[j].fbpro();
+				}
+				an[j].gaProc(offset[j], ioffset[j], j);
+				pb[j].gpbProc(an[j]);
+				if (denoise2[j])
+				{
+					if (an[j].sig_cnt + denoiser.gatedSignal[j] > 30)
+						mmi.gui.prps[j].stringToDraw2 = (new StringBuilder()).append((int)(((float)denoiser.gatedSignal[j] * 100F) / (float)(an[j].sig_cnt + denoiser.gatedSignal[j]))).append("% ").append(ChooseLang.M[237]).toString();//
+					else
+						mmi.gui.prps[j].stringToDraw2 = ChooseLang.M[200];//mana-0%门限
+					
+				} else
+				{
+					mmi.gui.prps[j].stringToDraw2 = "";
+				}
+				break;
+
+			case 7: // '\007'
+				offset = denoiser.gdProc(buffer1, buffer2, buffer_utral, denoise1, denoise2, chNo - 1, phaseShift, currentCycle, false);
+				GisXYZ.refresh = true;
+				break;
+			}
 		}
 		
 		long l4 = System.currentTimeMillis();

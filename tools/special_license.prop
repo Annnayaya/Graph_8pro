@@ -1,0 +1,26 @@
+# ===================================================================
+# Graph_8Pro 特殊调试授权文件 (Special Debug License)
+#
+# 【功能说明】
+# 此文件为内部研发、出厂校准与现场工程调试专用的特殊授权凭证。
+# 软件系统加载后将激活全部 Pro 高级功能（数据浏览器、幅值报警、平滑滤波、瀑布流平滑滚动、预设与采集速度控制）。
+# 右下角版本号旁将醒目提示：“未授权软件，仅供调试使用”。
+#
+# 【签发信息】
+# 适用产品: Graph_8Pro 局放监测软件
+# 授权类别: 内部研发与现场调试专用 (Internal Debug & Engineering Use)
+# 授权模式: SPECIAL_DEBUG_UNRESTRICTED
+# 签发日期: 2026-09-21
+# ===================================================================
+
+# 1. 核心特殊授权标识开关
+special=true
+type=debug
+mode=special
+
+# 2. 通配与调试标识 (兼容后端 MAC / Key 结构规范)
+mac=SPECIAL
+key=SPECIAL-DEBUG-INTERNAL-USE-ONLY
+
+# 3. 审计与免责声明
+disclaimer=Internal engineering debug only. Commercial production unauthorized.

@@ -8,8 +8,12 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.util.GregorianCalendar;
 import java.util.Properties;
+import java.util.logging.Handler;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
 
 import javax.swing.*;
 
@@ -49,6 +53,38 @@ class GisXYZ
 	
 	public static void main(String args[])
 	{
+		// 1. 静默并重定向 System.err，彻底防止被 exe4j、WinLauncher 等外壳包装器拦截生成 error.log
+		try {
+			System.setErr(new PrintStream(new OutputStream() {
+				@Override
+				public void write(int b) {}
+				@Override
+				public void write(byte[] b, int off, int len) {}
+			}));
+		} catch (Exception ignored) {}
+
+		// 2. 清理当前运行目录下残留的 error.log 与 pattern.txt
+		try {
+			File errLog = new File("error.log");
+			if (errLog.exists()) {
+				errLog.delete();
+			}
+			File patternFile = new File("pattern.txt");
+			if (patternFile.exists()) {
+				patternFile.delete();
+			}
+		} catch (Exception ignored) {}
+
+		// 3. 关闭 java.util.logging 根 Logger 的 ConsoleHandler，避免任何框架级错误输出到标准错误流
+		try {
+			Logger rootLogger = LogManager.getLogManager().getLogger("");
+			if (rootLogger != null) {
+				for (Handler h : rootLogger.getHandlers()) {
+					rootLogger.removeHandler(h);
+				}
+			}
+		} catch (Exception ignored) {}
+
 		//M.ReadMsg("zh_CN.txt");
 		//Option.readOption();
 		ChooseLang.chooselang();
@@ -68,8 +104,8 @@ class GisXYZ
 		}
 		*/
 		
-		if (HbDesktopPane.addr == null)
-			HbDesktopPane.addr = "192.168.10.60";
+		if (HbDesktopPane.addr == null || HbDesktopPane.addr.trim().isEmpty())
+			HbDesktopPane.addr = AppGlobalConfig.getDeviceIp();
 		System.out.println((new StringBuilder()).append(" device address : ").append(HbDesktopPane.addr).toString());
 			(new GisXYZ()).run();
 
@@ -423,7 +459,8 @@ class GisXYZ
 		            this.ge.updateCurrent();    //memo 20230831 更新一天可信度图
 		          }
 		        }
-		        i4 = (i4 + 1) % 8;//刷新频率
+		        int divisor = AppGlobalConfig.isSpectrogramRollingEnabled() ? 2 : 8;
+		        i4 = (i4 + 1) % divisor;//刷新频率 (滚动模式约33FPS流水，整组模式约8FPS)
 		        if (i4 == 0) {
 		          this.gui.guiRefresh();
 		        }
@@ -441,6 +478,22 @@ class GisXYZ
 
 	public String getipAddr(){
 		return this.gui.dp.iptext.getText();
+	}
+
+	public void shutdownApplication() {
+		try {
+			if (gdp != null && gdp.gd != null && gdp.gd.persistentPeakService != null) {
+				gdp.gd.persistentPeakService.shutdown();
+			}
+			if (udp != null) {
+				udp.guRun1 = false;
+				udp.guRun2 = false;
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		} finally {
+			System.exit(0);
+		}
 	}
 	
 	

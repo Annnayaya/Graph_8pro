@@ -19,6 +19,9 @@ class GisUDP extends Thread
 	DatagramSocket s;
 	DatagramPacket rcv;
 	DatagramPacket snd;
+	public static volatile boolean hasPacketGap = false;
+	private long lastFrameNo = -1;
+	private long lastValidPacketTime = System.currentTimeMillis();
 	public static int udpport=20001;
     // [新增] 极度隐蔽的动态端口配置读取（十六进制伪装 + 数学混淆算法 + 隐藏在 lib 目录）
     static {
@@ -55,7 +58,7 @@ class GisUDP extends Thread
             // 发生任何异常全部静默处理，安全回退到默认的 20001 端口
         }
     }
-	public static InetAddress das;
+	public static volatile InetAddress das;
 	byte addr[] = {
 		-64, -88, 1, 1
 	};
@@ -172,40 +175,66 @@ class GisUDP extends Thread
 						k2 = 0;
 					}
 					s.receive(rcv);//mana-service
-					byte[] receivedData = rcv.getData();
-					String hexString = bytesToHex(receivedData);
-					Path rootPath = Paths.get("").toAbsolutePath();
-					Path reportDir = rootPath.resolve("reportdata"); // 目录路径
-					long maxFileSize = 10L * 1024 * 1024; // 10MB
 
-					try {
-						// 确保目录存在
-						Files.createDirectories(reportDir);
-
-						// 1. 找到当前最新的文件（优先找最大序号的data_xx.txt，没有则用data.txt）
-						Path currentFile = findLatestFile(reportDir);
-
-						// 2. 检查当前文件是否超过10M，如果超过则创建下一个文件
-						if (Files.exists(currentFile)) {
-							long currentSize = Files.size(currentFile);
-							if (currentSize > maxFileSize) {
-								currentFile = createNextFile(reportDir, currentFile);
+					// 严格校验数据包来源 IP：仅接收当前设定的目标设备 IP 的数据包，过滤非目标 IP 报文
+					InetAddress currentDas = das;
+					if (currentDas == null) {
+						continue;
+					}
+					InetAddress senderAddr = rcv.getAddress();
+					if (senderAddr != null) {
+						boolean match = isPacketSourceMatched(senderAddr, currentDas);
+						if (!match) {
+							long now = System.currentTimeMillis();
+							if (now - lastValidPacketTime > 600) {
+								retry++;
+								if (now - lastValidPacketTime > 1000) {
+									resend();
+									lastValidPacketTime = now;
+								}
 							}
+							continue;
 						}
+					}
 
-						// 3. 写入数据到当前文件
-						Files.writeString(currentFile, hexString + System.lineSeparator(),
-								StandardOpenOption.APPEND, StandardOpenOption.CREATE);
-						System.out.println("数据已写入文件: " + currentFile + "，当前大小: " + Files.size(currentFile) + "字节");
+					if (AppGlobalConfig.isReportDataEnabled())
+					{
+						byte[] receivedData = rcv.getData();
+						String hexString = bytesToHex(receivedData);
+						Path rootPath = Paths.get("").toAbsolutePath();
+						Path reportDir = rootPath.resolve("reportdata"); // 目录路径
+						long maxFileSize = 10L * 1024 * 1024; // 10MB
 
-					} catch (Exception e) {
-						e.printStackTrace();
+						try {
+							// 确保目录存在
+							Files.createDirectories(reportDir);
+
+							// 1. 找到当前最新的文件（优先找最大序号的data_xx.txt，没有则用data.txt）
+							Path currentFile = findLatestFile(reportDir);
+
+							// 2. 检查当前文件是否超过10M，如果超过则创建下一个文件
+							if (Files.exists(currentFile)) {
+								long currentSize = Files.size(currentFile);
+								if (currentSize > maxFileSize) {
+									currentFile = createNextFile(reportDir, currentFile);
+								}
+							}
+
+							// 3. 写入数据到当前文件
+							Files.writeString(currentFile, hexString + System.lineSeparator(),
+									StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+							System.out.println("数据已写入文件: " + currentFile + "，当前大小: " + Files.size(currentFile) + "字节");
+
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
 					}
 
 					if (rcv.getLength() == 525 || rcv.getLength() == 533 || rcv.getLength() == 1037)//mana-1037(04命令返回长度)
 					{
 
 						retry = 0;
+						lastValidPacketTime = System.currentTimeMillis();
 //						recebytenum += 525;
 						recebytenum += 1037;
 						//if (guRun1)
@@ -219,6 +248,11 @@ class GisUDP extends Thread
 						l = (long)rcvbuf[++j1] & 255L | l << 8;
 						l = (long)rcvbuf[++j1] & 255L | l << 8;
 						frameNo = l;
+						if (lastFrameNo >= 0 && frameNo != lastFrameNo + 1)
+						{
+							hasPacketGap = true;
+						}
+						lastFrameNo = frameNo;
 						for (int i = 0; i < 64; i++)
 						{
 							for (int i1 = 0; i1 < 8; i1++)//mana-刷新prps prpd图：i1为通道数
@@ -253,8 +287,9 @@ class GisUDP extends Thread
 							if (GisXYZ.hwtest != 0)
 							{
 								GisXYZ.hwtest = 0;
-								GisSignal.calMin_dBm = -80;
-								gd.mmi.gui.fullPane.setEnabledAt(1, true);
+								if (gd.mmi.gui.fullPane != null && gd.mmi.gui.fullPane.getTabCount() > 1) {
+									gd.mmi.gui.fullPane.setEnabledAt(1, true);
+								}
 								gd.mmi.gui.dp.trgButton.setEnabled(true);
 								gd.mmi.gui.dp.siteManButton.setEnabled(true);
 								gd.mmi.gui.dp.libButton.setEnabled(true);
@@ -265,7 +300,9 @@ class GisUDP extends Thread
 						{
 							GisXYZ.hwtest = 1;
 							GisSignal.calMin_dBm = -65;
-							gd.mmi.gui.fullPane.setEnabledAt(1, false);
+							if (gd.mmi.gui.fullPane != null && gd.mmi.gui.fullPane.getTabCount() > 1) {
+								gd.mmi.gui.fullPane.setEnabledAt(1, false);
+							}
 							gd.mmi.gui.dp.trgButton.setEnabled(false);
 							gd.mmi.gui.dp.siteManButton.setEnabled(false);
 							gd.mmi.gui.dp.libButton.setEnabled(false);
@@ -292,6 +329,13 @@ class GisUDP extends Thread
 								gd.ioffset[k] = j2;
 								k++;
 							}
+						}
+
+						// 采集速度调控：根据配置的额外延时进行周波休眠
+						int acqDelay = AppGlobalConfig.getAcquisitionSpeedDelayMs();
+						if (acqDelay > 0)
+						{
+							Thread.sleep(acqDelay);
 						}
 					} else
 					{
@@ -409,9 +453,13 @@ class GisUDP extends Thread
 //		System.out.println("4  "+sndbuf[4]);
 //		System.out.println("5  "+sndbuf[5]);
 //		System.out.println(sndbuf);
+		InetAddress target = das;
+		if (target == null) {
+			return;
+		}
 		snd.setPort(udpport);
 		snd.setLength(6);
-		snd.setAddress(das);
+		snd.setAddress(target);
 
 		try
 		{
@@ -421,6 +469,18 @@ class GisUDP extends Thread
 		{
 			exception.printStackTrace();
 		}
+	}
+
+	public static boolean isPacketSourceMatched(InetAddress senderAddr, InetAddress targetAddr) {
+		if (targetAddr == null || senderAddr == null) {
+			return false;
+		}
+		boolean match = senderAddr.equals(targetAddr) 
+				|| senderAddr.getHostAddress().equals(targetAddr.getHostAddress());
+		if (!match && senderAddr.isLoopbackAddress() && targetAddr.isLoopbackAddress()) {
+			match = true;
+		}
+		return match;
 	}
 	
 	

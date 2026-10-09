@@ -111,6 +111,25 @@ public class JRTogButton extends JToggleButton {
 		});
 	}
     
+    /* 报警闪烁状态 */
+    private boolean alarmFlashRed = false;
+
+    public void setAlarmFlashRed(boolean flashRed) {
+        if (this.alarmFlashRed != flashRed) {
+            this.alarmFlashRed = flashRed;
+            if (flashRed) {
+                setForeground(Color.WHITE);
+            } else {
+                setForeground(Color.BLACK);
+            }
+            repaint();
+        }
+    }
+
+    public boolean isAlarmFlashRed() {
+        return alarmFlashRed;
+    }
+    
     @Override
     protected void paintComponent(Graphics g)
     {
@@ -126,8 +145,13 @@ public class JRTogButton extends JToggleButton {
 		/* GradientPaint是颜色渐变类 */
 		GradientPaint p1;
 		GradientPaint p2;
-		//if (this.getModel().isPressed())
-		if (this.getModel().isSelected())//JToggleButton
+		if (alarmFlashRed)
+		{
+		    p1 = new GradientPaint(0, 0, new Color(254, 202, 202), 0, height, new Color(153, 27, 27), true);
+		    p2 = new GradientPaint(0, 1, new Color(254, 226, 226, 180), 0, height, new Color(153, 27, 27, 200), true);
+		    tran = 1F;
+		}
+		else if (this.getModel().isSelected())//JToggleButton
 		{
 		    p1 = new GradientPaint(0, 0, new Color(0, 0, 0), 0, height, new Color(100, 100, 100), true);
 		    p2 = new GradientPaint(0, 1, new Color(0, 0, 0, 120), 0, height, new Color(255, 255, 255, 250), true);
@@ -143,7 +167,9 @@ public class JRTogButton extends JToggleButton {
 		// 最后两个参数数值越大，按钮越圆，以下同理
 		Shape clip = g2d.getClip();
 		g2d.clip(r2d);
-		GradientPaint gp = new GradientPaint(0.0F, 0.0F, COLOR1, 0.0F, height / 2, COLOR2, true);
+		Color c1 = alarmFlashRed ? new Color(239, 68, 68) : COLOR1;
+		Color c2 = alarmFlashRed ? new Color(185, 28, 28) : COLOR2;
+		GradientPaint gp = new GradientPaint(0.0F, 0.0F, c1, 0.0F, height / 2, c2, true);
 		g2d.setPaint(gp);
 		g2d.fillRect(0, 0, with, height);
 		g2d.setClip(clip);

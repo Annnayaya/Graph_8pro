@@ -2,9 +2,12 @@ package com.Spectrogram.ZmGis8CH.gis_app_8CH;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.io.File;
@@ -33,7 +36,7 @@ class HbDesktopPane extends JPanel
 	public static boolean[] chselect= new boolean[8];
 	public static int total = 8;
 	public static int tongdao=8;//设置显示通道数
-	public static String addr = "192.168.10.60";
+	public static volatile String addr = AppGlobalConfig.getDeviceIp();
 	static File file = new File("lang" + File.separator + "save.dat");
 	static File filenum = new File("lang" + File.separator + "savenum.dat");
 	public static char[] readchar = new char[9];
@@ -54,6 +57,10 @@ class HbDesktopPane extends JPanel
 	private static boolean key;//键
 	JRTogButton jbutton1T3; //1-3
 	JRTogButton jbutton1T4; //4-6
+	public JToggleButton persistentTestButton;
+	public JLabel persistentTestStatusLabel;
+	public JButton openTrendButton;
+	private boolean isUpdatingIp = false;
 
 
 	class ChannelOpenAL implements ActionListener
@@ -419,6 +426,11 @@ class HbDesktopPane extends JPanel
 	JRoundButton quitbutton;
 	JRoundButton ipbutton;
 
+	public JRoundButton btnPreset1;
+	public JRoundButton btnPreset2;
+	public JRoundButton btnPreset3;
+	public JRoundButton speedConfigButton;
+
 	public HbDesktopPane(GisGUI gisgui)
 	{
 		isFirst = Boolean.valueOf(true);
@@ -435,12 +447,19 @@ class HbDesktopPane extends JPanel
 		// 初始化背景图（保持不变）
 		try
 		{
-			bgLabel = new JLabel(new ImageIcon(ImageIO.read(new File("pics/HBEDSBG.png"))), 0);
+			File bgFile = new File("pics/HBEDSBG.PNG");
+			if (!bgFile.exists()) {
+				bgFile = new File("pics/HBEDSBG.png");
+			}
+			if (bgFile.exists()) {
+				bgLabel = new JLabel(new ImageIcon(ImageIO.read(bgFile)), 0);
+			} else {
+				bgLabel = new JLabel("no image", 0);
+			}
 		}
 		catch (Exception exception)
 		{
 			bgLabel = new JLabel("no image", 0);
-			exception.printStackTrace();
 		}
 		dp = new JDesktopPane();
 		dp.setBackground(new Color(255, 255, 255));
@@ -459,43 +478,54 @@ class HbDesktopPane extends JPanel
 		toolBarStyle.applyStyle(jtoolbarBottom);
 
 		// -------------------------- 第一行工具栏（jtoolbarTop）：核心操作组件 --------------------------
-		// IP输入框（原逻辑不变，添加到第一行）
-		String str = new String("192.168.10.60");
+		// IP输入框（从全局配置读取默认IP）
+		String str = AppGlobalConfig.getDeviceIp();
+		addr = str;
+		try {
+			GisUDP.das = InetAddress.getByName(addr);
+		} catch (Exception ignored) {
+		}
 		iptext = new JTextField(str);//初始化文本输入框  61
 		iptext.setPreferredSize(new Dimension(100,20));
-		// IP输入监听（保持不变）
+		// IP输入监听
 		iptext.getDocument().addDocumentListener(new DocumentListener(){
-			@Override
-			public void changedUpdate(DocumentEvent e) {
+			private void onDocumentChange() {
+				if (isUpdatingIp) return;
 				String s = iptext.getText().trim();
 				addr = s;
-				try {
-					GisUDP.das = InetAddress.getByName(addr);
-				} catch (UnknownHostException e1) {
-					e1.printStackTrace();
+				if (s.isEmpty()) {
+					GisUDP.das = null;
+				} else {
+					try {
+						GisUDP.das = InetAddress.getByName(s);
+					} catch (UnknownHostException e1) {
+						GisUDP.das = null;
+					}
 				}
+				updatePresetButtonsState();
 			}
 			@Override
-			public void insertUpdate(DocumentEvent e) {
-				String s = iptext.getText().trim();
-				addr = s;
-				try {
-					GisUDP.das = InetAddress.getByName(addr);
-				} catch (UnknownHostException e1) {
-					e1.printStackTrace();
-				}
-			}
+			public void changedUpdate(DocumentEvent e) { onDocumentChange(); }
 			@Override
-			public void removeUpdate(DocumentEvent e) {
-				String s = iptext.getText().trim();
-				addr = s;
-				try {
-					GisUDP.das = InetAddress.getByName(addr);
-				} catch (UnknownHostException e1) {
-					e1.printStackTrace();
-				}
+			public void insertUpdate(DocumentEvent e) { onDocumentChange(); }
+			@Override
+			public void removeUpdate(DocumentEvent e) { onDocumentChange(); }
+		});
+
+		iptext.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				updateTargetIp(iptext.getText().trim());
 			}
 		});
+
+		iptext.addFocusListener(new FocusAdapter() {
+			@Override
+			public void focusLost(FocusEvent e) {
+				updateTargetIp(iptext.getText().trim());
+			}
+		});
+
 		// IP输入限制（保持不变）
 		iptext.addKeyListener(new KeyAdapter(){
 			public void keyTyped(KeyEvent e){
@@ -505,7 +535,85 @@ class HbDesktopPane extends JPanel
 				}
 			}
 		});
-		jtoolbarTop.add(iptext); // 添加到第一行
+
+		// 3 个预设 IP 按钮
+		btnPreset1 = new JRoundButton(AppGlobalConfig.getPresetName1(), JRoundButton.ashen);
+		btnPreset2 = new JRoundButton(AppGlobalConfig.getPresetName2(), JRoundButton.ashen);
+		btnPreset3 = new JRoundButton(AppGlobalConfig.getPresetName3(), JRoundButton.ashen);
+		btnPreset1.setFont(GisXYZ.fontG);
+		btnPreset2.setFont(GisXYZ.fontG);
+		btnPreset3.setFont(GisXYZ.fontG);
+		updatePresetButtonsText();
+
+		ActionListener presetClick = new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				String targetIp = null;
+				if (e.getSource() == btnPreset1) targetIp = AppGlobalConfig.getPresetIp1();
+				else if (e.getSource() == btnPreset2) targetIp = AppGlobalConfig.getPresetIp2();
+				else if (e.getSource() == btnPreset3) targetIp = AppGlobalConfig.getPresetIp3();
+
+				if (targetIp != null && !targetIp.trim().isEmpty()) {
+					updateTargetIp(targetIp.trim());
+				}
+			}
+		};
+		btnPreset1.addActionListener(presetClick);
+		btnPreset2.addActionListener(presetClick);
+		btnPreset3.addActionListener(presetClick);
+
+		MouseAdapter presetRightClick = new MouseAdapter() {
+			@Override
+			public void mousePressed(MouseEvent e) {
+				if (SwingUtilities.isRightMouseButton(e)) {
+					showPresetEditDialog((Component) e.getSource());
+				}
+			}
+		};
+		btnPreset1.addMouseListener(presetRightClick);
+		btnPreset2.addMouseListener(presetRightClick);
+		btnPreset3.addMouseListener(presetRightClick);
+
+		int ipMode = AppGlobalConfig.getIpSwitchMode();
+		if (ipMode == 0) {
+			// 直接输入模式
+			jtoolbarTop.add(iptext);
+		} else if (ipMode == 1) {
+			// 3个预设按钮模式
+			jtoolbarTop.add(btnPreset1);
+			jtoolbarTop.add(btnPreset2);
+			jtoolbarTop.add(btnPreset3);
+		} else {
+			// 并行模式 (直接输入 + 3个预设按钮)
+			jtoolbarTop.add(iptext);
+			jtoolbarTop.add(btnPreset1);
+			jtoolbarTop.add(btnPreset2);
+			jtoolbarTop.add(btnPreset3);
+		}
+
+		// 采集速度配置按键 - 第一行
+		speedConfigButton = new JRoundButton("采集速度", JRoundButton.ashen);
+		speedConfigButton.setPreferredSize(new Dimension(80, 22));
+		speedConfigButton.setFont(GisXYZ.fontG);
+		updateSpeedButtonLabel();
+		speedConfigButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (!LicenseManager.isLicensed()) {
+					JOptionPane.showMessageDialog(gui.full, "未检测到有效授权文件，采集速度已锁定为默认极速状态！", "提示", JOptionPane.INFORMATION_MESSAGE);
+					return;
+				}
+				SpeedConfigDialog dlg = new SpeedConfigDialog(gui.full);
+				dlg.setVisible(true);
+				if (dlg.isConfirmed()) {
+					updateSpeedButtonLabel();
+				}
+			}
+		});
+		// 仅在已授权时展示采集速度配置按钮，默认模式（未授权）下不显示
+		if (LicenseManager.isLicensed()) {
+			jtoolbarTop.add(speedConfigButton);
+		}
 
 		// 持续获取数据按钮（conButton1）- 第一行
 		conButton1 = new JCircleButton();//待机
@@ -938,7 +1046,11 @@ class HbDesktopPane extends JPanel
 		quitbutton.addActionListener(new ActionListener(){
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				System.exit(0);
+				if (gui != null && gui.gm != null) {
+					gui.gm.shutdownApplication();
+				} else {
+					System.exit(0);
+				}
 			}
 		});
 		quitbutton.setVisible(false);
@@ -959,7 +1071,6 @@ class HbDesktopPane extends JPanel
 		{
 			prpsToggle[j].setSelected(false);
 			prpdToggle[j].setSelected(false);
-			chcpToggle[j].setSelected(false);
 		}
 	}
 
@@ -971,6 +1082,41 @@ class HbDesktopPane extends JPanel
 			toolBar.setBorder(new EtchedBorder(1)); // 边框样式
 			toolBar.setMargin(new Insets(2, 5, 2, 5)); // 内边距：上下2，左右5
 		}
+	}
+
+	public void updatePersistentTestState(final PersistentPeakSnapshot snapshot) {
+		if (snapshot == null || persistentTestStatusLabel == null) return;
+		if (persistentTestButton != null && !persistentTestButton.isSelected()) {
+			persistentTestStatusLabel.setText("");
+			return;
+		}
+		PeakSessionState state = snapshot.getSessionState();
+		String stateText = "";
+		switch (state) {
+			case IDLE:
+				stateText = "";
+				break;
+			case STARTING:
+			case WAITING_FOR_ACQUISITION:
+				stateText = ChooseLang.M.length > 412 ? ChooseLang.M[412] : "等待采集";
+				break;
+			case WARMING_UP:
+				stateText = ChooseLang.M.length > 413 ? ChooseLang.M[413] : "预热";
+				break;
+			case INITIALIZING:
+				stateText = ChooseLang.M.length > 414 ? ChooseLang.M[414] : "初始化";
+				break;
+			case RUNNING:
+				stateText = (ChooseLang.M.length > 415 ? ChooseLang.M[415] : "持久测试中") + " (" + String.format(java.util.Locale.ROOT, "%.1fs", snapshot.getElapsedSeconds()) + ")";
+				break;
+			case FINAL_HOLD:
+				stateText = "";
+				break;
+			case ERROR:
+				stateText = ChooseLang.M.length > 418 ? ChooseLang.M[418] : "CSV写入异常";
+				break;
+		}
+		persistentTestStatusLabel.setText(stateText);
 	}
 
 	// -------------------------- 原有方法（保持不变） --------------------------
@@ -1151,7 +1297,152 @@ class HbDesktopPane extends JPanel
 		}
 	}
 
-	// 原Cltr_PNColor方法已整合到第二行工具栏，此处删除重复代码
+	public void updateTargetIp(String newIp) {
+		if (newIp == null) newIp = "";
+		newIp = newIp.trim();
+		addr = newIp;
+		if (newIp.isEmpty()) {
+			GisUDP.das = null;
+		} else {
+			try {
+				GisUDP.das = InetAddress.getByName(newIp);
+				System.out.println("目标设备 IP 切换为: " + GisUDP.das);
+			} catch (UnknownHostException ex) {
+				GisUDP.das = null;
+			}
+		}
+
+		if (iptext != null && !newIp.equals(iptext.getText().trim())) {
+			isUpdatingIp = true;
+			try {
+				iptext.setText(newIp);
+			} finally {
+				isUpdatingIp = false;
+			}
+		}
+
+		updatePresetButtonsState();
+
+		// 如果当前正在采集，向新目标 IP 立即发送一次采集启动指令
+		if (gui != null && gui.gm != null && gui.gm.udp != null && gui.gm.udp.guRun1) {
+			gui.gm.udp.sendPacket(0, 4, 0);
+		}
+	}
+
+	public void updatePresetButtonsState() {
+		String current = (iptext != null && iptext.getText() != null) ? iptext.getText().trim() : (addr != null ? addr.trim() : "");
+		boolean match1 = current.equals(AppGlobalConfig.getPresetIp1());
+		boolean match2 = current.equals(AppGlobalConfig.getPresetIp2());
+		boolean match3 = current.equals(AppGlobalConfig.getPresetIp3());
+
+		if (btnPreset1 != null) {
+			btnPreset1.setBackground(match1 ? new Color(59, 130, 246) : new Color(229, 229, 229));
+			btnPreset1.setForeground(match1 ? Color.WHITE : Color.BLACK);
+		}
+		if (btnPreset2 != null) {
+			btnPreset2.setBackground(match2 ? new Color(59, 130, 246) : new Color(229, 229, 229));
+			btnPreset2.setForeground(match2 ? Color.WHITE : Color.BLACK);
+		}
+		if (btnPreset3 != null) {
+			btnPreset3.setBackground(match3 ? new Color(59, 130, 246) : new Color(229, 229, 229));
+			btnPreset3.setForeground(match3 ? Color.WHITE : Color.BLACK);
+		}
+	}
+
+	public void updatePresetButtonsText() {
+		FontMetrics fm = getFontMetrics(GisXYZ.fontG);
+		if (btnPreset1 != null) {
+			String n1 = AppGlobalConfig.getPresetName1();
+			btnPreset1.setText(n1);
+			int w1 = Math.max(55, (fm != null ? fm.stringWidth(n1) : n1.length() * 12) + 16);
+			btnPreset1.setPreferredSize(new Dimension(w1, 22));
+			btnPreset1.setToolTipText(n1 + " (IP: " + AppGlobalConfig.getPresetIp1() + "，右键可快速编辑)");
+		}
+		if (btnPreset2 != null) {
+			String n2 = AppGlobalConfig.getPresetName2();
+			btnPreset2.setText(n2);
+			int w2 = Math.max(55, (fm != null ? fm.stringWidth(n2) : n2.length() * 12) + 16);
+			btnPreset2.setPreferredSize(new Dimension(w2, 22));
+			btnPreset2.setToolTipText(n2 + " (IP: " + AppGlobalConfig.getPresetIp2() + "，右键可快速编辑)");
+		}
+		if (btnPreset3 != null) {
+			String n3 = AppGlobalConfig.getPresetName3();
+			btnPreset3.setText(n3);
+			int w3 = Math.max(55, (fm != null ? fm.stringWidth(n3) : n3.length() * 12) + 16);
+			btnPreset3.setPreferredSize(new Dimension(w3, 22));
+			btnPreset3.setToolTipText(n3 + " (IP: " + AppGlobalConfig.getPresetIp3() + "，右键可快速编辑)");
+		}
+		if (jtoolbarTop != null) {
+			jtoolbarTop.revalidate();
+			jtoolbarTop.repaint();
+		}
+	}
+
+	private void showPresetEditDialog(Component comp) {
+		int index = 1;
+		if (comp == btnPreset2) index = 2;
+		else if (comp == btnPreset3) index = 3;
+
+		String curName = AppGlobalConfig.getPresetName(index);
+		String curIp = AppGlobalConfig.getPresetIp(index);
+
+		JTextField nameField = new JTextField(curName, 12);
+		JTextField ipField = new JTextField(curIp, 15);
+
+		JPanel p = new JPanel(new GridLayout(2, 2, 8, 8));
+		p.add(new JLabel("预设按钮文本:"));
+		p.add(nameField);
+		p.add(new JLabel("预设目标 IP:"));
+		p.add(ipField);
+
+		int res = JOptionPane.showConfirmDialog(this, p, "编辑快捷预设 " + index + " 参数", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+		if (res == JOptionPane.OK_OPTION) {
+			String newName = nameField.getText().trim();
+			String newIp = ipField.getText().trim();
+			if (!newName.isEmpty()) {
+				AppGlobalConfig.setPresetName(index, newName);
+			}
+			if (!newIp.isEmpty()) {
+				AppGlobalConfig.setPresetIp(index, newIp);
+			}
+			try {
+				AppGlobalConfig.saveCurrentConfig();
+			} catch (Exception ex) {
+				ex.printStackTrace();
+			}
+			updatePresetButtonsText();
+			updatePresetButtonsState();
+		}
+	}
+
+	public void updateSpeedButtonLabel() {
+		if (speedConfigButton == null) return;
+		if (!LicenseManager.isLicensed()) {
+			speedConfigButton.setVisible(false);
+			speedConfigButton.setText("速度:极速");
+			speedConfigButton.setEnabled(false);
+			speedConfigButton.setToolTipText("未检测到有效授权文件，采集速度已锁定为默认极速状态");
+			return;
+		}
+		speedConfigButton.setVisible(true);
+		speedConfigButton.setEnabled(true);
+		String mode = AppGlobalConfig.getAcquisitionSpeedMode();
+		int delay = AppGlobalConfig.getAcquisitionSpeedDelayMs();
+		String desc;
+		if ("MAX".equalsIgnoreCase(mode) || delay == 0) {
+			desc = "极速";
+		} else if ("FAST".equalsIgnoreCase(mode) || delay == 20) {
+			desc = "快速";
+		} else if ("MEDIUM".equalsIgnoreCase(mode) || delay == 80) {
+			desc = "中速";
+		} else if ("SLOW".equalsIgnoreCase(mode) || delay == 480) {
+			desc = "慢速";
+		} else {
+			desc = delay + "ms";
+		}
+		speedConfigButton.setText("速度:" + desc);
+		speedConfigButton.setToolTipText("当前采集速度: " + desc + " (延时 " + delay + "ms)，点击修改");
+	}
 
 	public void opbt1t3(){}
 	public void opbt4t6(){}

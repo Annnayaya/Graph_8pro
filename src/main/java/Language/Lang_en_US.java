@@ -96,7 +96,9 @@ public class Lang_en_US extends ListResourceBundle {
 			{"392",""},{"393",""},{"394",""},{"395",""},{"396",""},{"397",""},{"398",""},
 			{"399",""},{"400","Max"},{"401","Avg"},{"402","amplitude"},{"403","phase"},{"404","time"},
 			{"405","Select 100 (Single Select only)"},{"406","Check All"},{"407","Uncheck All"},
-			{"408","Start continuous data acquisition"},{"409","Acquire one screen of data"},{"410","Please select a start timestamp"}
+			{"408","Start continuous data acquisition"},{"409","Acquire one screen of data"},{"410","Please select a start timestamp"},
+			{"411","Persistent Test"},{"412","Waiting for Acq"},{"413","Warming Up"},{"414","Initializing"},{"415","Testing"},
+			{"416","Result Held"},{"417","Persistent Peak"},{"418","CSV Error"},{"419","Open Trend Chart"}
 	};
 
 	// 构造方法：初始化时优先读取外部文件，失败则用默认数据
@@ -117,8 +119,6 @@ public class Lang_en_US extends ListResourceBundle {
 
 		// 1. 检查文件是否存在
 		if (!configFile.exists()) {
-			LOGGER.log(Level.WARNING, "Config file not found: {0} (Path: {1}), using default data",
-					new Object[]{CONFIG_PATH, configFile.getAbsolutePath()});
 			return null;
 		}
 

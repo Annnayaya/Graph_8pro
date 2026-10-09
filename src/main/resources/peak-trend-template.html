@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GraphApp8Pro 持久峰值平滑趋势图</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #333;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        h1 { font-size: 20px; color: #fff; }
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .controls-panel {
+            background: #252526;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+        }
+        .file-dropzone {
+            border: 2px dashed #444;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            text-align: center;
+            background: #2d2d2d;
+            transition: border-color 0.2s, background 0.2s;
+            font-size: 13px;
+        }
+        .file-dropzone.dragover { border-color: #007acc; background: #333; }
+        .file-dropzone input { display: none; }
+        .btn {
+            background: #0e639c;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn:hover { background: #1177bb; }
+        .btn-secondary { background: #3c3c3c; }
+        .btn-secondary:hover { background: #4c4c4c; }
+        .input-num {
+            background: #2d2d2d;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            width: 58px;
+            text-align: center;
+        }
+        .input-num:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+        .channel-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .channel-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            user-select: none;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #333;
+        }
+        .chart-container {
+            position: relative;
+            background: #252526;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+        .chart-header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        canvas {
+            width: 100%;
+            height: 480px;
+            background: #181818;
+            border-radius: 4px;
+            cursor: crosshair;
+            display: block;
+        }
+        .tooltip {
+            position: absolute;
+            display: none;
+            background: rgba(30, 30, 30, 0.94);
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 12px;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            z-index: 100;
+            white-space: nowrap;
+        }
+        .stats-container {
+            background: #252526;
+            border-radius: 6px;
+            padding: 12px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+        th, td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #333;
+        }
+        th { background: #2d2d2d; color: #eee; font-weight: 600; }
+        tr:hover { background: #2a2d2e; }
+        .color-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .status-msg {
+            color: #888;
+            font-size: 13px;
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>GraphApp8Pro 持久峰值平滑趋势查看器</h1>
+        <div class="toolbar-group">
+            <button class="btn btn-secondary" id="btnZoomIn" title="按鼠标中心放大">🔍+ 放大</button>
+            <button class="btn btn-secondary" id="btnZoomOut" title="缩小视图">🔍- 缩小</button>
+            <button class="btn btn-secondary" id="btnResetZoom" title="重置时间与幅值(-80~-20dBm)">↺ 重置(-80~-20)</button>
+            <button class="btn btn-secondary" id="btnAutoFitY" title="根据当前数据极值自适应幅值轴">📐 自适应Y轴</button>
+            <div style="display:flex; align-items:center; gap:4px; margin-left:6px; font-size:12px;">
+                <span>幅值:</span>
+                <input type="number" id="inputMinY" class="input-num" value="-80" step="5">
+                <span>~</span>
+                <input type="number" id="inputMaxY" class="input-num" value="-20" step="5">
+                <span>dBm</span>
+                <button class="btn btn-secondary" id="btnApplyYRange" style="padding:4px 8px;font-size:12px;">确定</button>
+            </div>
+            <button class="btn" id="btnExportPng">📷 导出图片</button>
+        </div>
+    </header>
+
+    <div class="controls-panel">
+        <div class="file-dropzone" id="dropzone">
+            <span>点击或拖放选择 <b>peaks.csv</b> (支持多文件合并)</span>
+            <input type="file" id="fileInput" multiple accept=".csv">
+        </div>
+        <div class="channel-selector" id="channelList">
+            <!-- 动态生成 8 通道复选框 -->
+        </div>
+        <div class="status-msg" id="statusMsg">未加载数据</div>
+    </div>
+
+    <div class="chart-container">
+        <div class="chart-header-bar">
+            <span>💡 提示：支持<b>鼠标滚轮缩放</b>、<b>左键框选区域放大</b>、<b>右键拖拽平移</b>、<b>双击重置</b></span>
+            <span id="zoomRatioLabel">缩放: 100% | 幅值: -80 ~ -20 dBm</span>
+        </div>
+        <canvas id="chartCanvas"></canvas>
+        <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <div class="stats-container">
+        <h2 style="font-size:15px; margin-bottom:8px; color:#fff;">统计信息 (针对 CSV 平滑数据)</h2>
+        <table id="statsTable">
+            <thead>
+                <tr>
+                    <th>通道</th>
+                    <th>起始值 (dBm)</th>
+                    <th>结束值 (dBm)</th>
+                    <th>最大值 (dBm)</th>
+                    <th>最小值 (dBm)</th>
+                    <th>平均值 (dBm)</th>
+                    <th>显著变化次数</th>
+                </tr>
+            </thead>
+            <tbody id="statsBody">
+                <tr><td colspan="7" style="text-align:center; color:#777;">请先选择或拖放 CSV 文件</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+<script>
+    /* __INLINE_CSV_INJECTION__ */
+
+    const CHANNELS = [
+        { name: "UHF-1", color: "#f1c40f" }, // 黄色
+        { name: "UHF-2", color: "#2ecc71" }, // 绿色
+        { name: "AE-1", color: "#00d2d3" },  // 青色
+        { name: "AE-2", color: "#ff4757" },  // 红色
+        { name: "HFCT-1", color: "#a55eea" },// 紫色
+        { name: "HFCT-2", color: "#ff9f43" },// 橙色
+        { name: "Spare-1", color: "#54a0ff" },// 浅蓝
+        { name: "Spare-2", color: "#ffffff" } // 白色
+    ];
+
+    let channelVisible = [true, true, true, true, true, true, true, true];
+    let parsedData = []; // { time, elapsed, values: [8], event }
+
+    // 默认幅值轴范围：-80 到 -20 dBm
+    const DEFAULT_MIN_Y = -80.0;
+    const DEFAULT_MAX_Y = -20.0;
+
+    let currentMinY = DEFAULT_MIN_Y;
+    let currentMaxY = DEFAULT_MAX_Y;
+
+    // 时间 X 轴缩放控制 (0.0 ~ 1.0)
+    let zoomStart = 0.0;
+    let zoomEnd = 1.0;
+
+    // 鼠标交互控制
+    let isSelecting = false;
+    let selectStartX = 0;
+    let selectStartY = 0;
+    let selectCurrentX = 0;
+    let selectCurrentY = 0;
+
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panInitialZoomStart = 0;
+    let panInitialZoomEnd = 1.0;
+    let panInitialMinY = DEFAULT_MIN_Y;
+    let panInitialMaxY = DEFAULT_MAX_Y;
+
+    const canvas = document.getElementById('chartCanvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+    const statusMsg = document.getElementById('statusMsg');
+    const zoomRatioLabel = document.getElementById('zoomRatioLabel');
+    const inputMinY = document.getElementById('inputMinY');
+    const inputMaxY = document.getElementById('inputMaxY');
+
+    // 初始化通道复选框
+    const channelListEl = document.getElementById('channelList');
+    CHANNELS.forEach((ch, idx) => {
+        const label = document.createElement('label');
+        label.className = 'channel-checkbox';
+        label.innerHTML = `
+            <input type="checkbox" ${channelVisible[idx] ? 'checked' : ''} data-ch="${idx}">
+            <span class="color-dot" style="background:${ch.color}"></span>
+            ${ch.name}
+        `;
+        label.querySelector('input').addEventListener('change', (e) => {
+            channelVisible[idx] = e.target.checked;
+            renderChart();
+            renderStats();
+        });
+        channelListEl.appendChild(label);
+    });
+
+    // 拖放文件
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleFiles(e.dataTransfer.files);
+        }
+    });
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            handleFiles(e.target.files);
+        }
+    });
+
+    // 工具栏缩放按钮事件绑定
+    document.getElementById('btnResetZoom').addEventListener('click', () => {
+        resetZoom();
+    });
+
+    document.getElementById('btnZoomIn').addEventListener('click', () => {
+        zoomCenter(0.7);
+    });
+
+    document.getElementById('btnZoomOut').addEventListener('click', () => {
+        zoomCenter(1.4);
+    });
+
+    document.getElementById('btnAutoFitY').addEventListener('click', () => {
+        autoFitYRange();
+    });
+
+    document.getElementById('btnApplyYRange').addEventListener('click', () => {
+        applyManualYRange();
+    });
+
+    inputMinY.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyManualYRange(); });
+    inputMaxY.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyManualYRange(); });
+
+    document.getElementById('btnExportPng').addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = 'peak-trend-' + (new Date().toISOString().slice(0, 19).replace(/:/g, '-')) + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    });
+
+    // 页面加载完成后直接自动加载当前目录下的 peaks.csv 记录
+    window.addEventListener('DOMContentLoaded', () => {
+        if (typeof window.__INLINE_CSV__ !== 'undefined' && window.__INLINE_CSV__ && window.__INLINE_CSV__.trim().length > 0) {
+            parseCsvResults([{ name: 'peaks.csv', text: window.__INLINE_CSV__ }]);
+        } else {
+            // 尝试通过 fetch 异步自动加载同目录下的 peaks.csv
+            fetch('./peaks.csv')
+                .then(r => {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.text();
+                })
+                .then(text => {
+                    if (text && text.trim().length > 0) {
+                        parseCsvResults([{ name: 'peaks.csv', text: text }]);
+                    }
+                })
+                .catch(err => {
+                    console.log('Auto fetch peaks.csv info:', err);
+                });
+        }
+    });
+
+    function handleFiles(files) {
+        const fileList = Array.from(files);
+        let promises = fileList.map(file => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (evt) => resolve({ name: file.name, text: evt.target.result });
+                reader.readAsText(file, 'UTF-8');
+            });
+        });
+
+        Promise.all(promises).then(results => {
+            parseCsvResults(results);
+        });
+    }
+
+    function parseCsvResults(results) {
+        parsedData = [];
+
+        results.forEach(res => {
+            let text = res.text;
+            if (text && text.charCodeAt(0) === 0xFEFF) {
+                text = text.slice(1);
+            }
+            if (!text) return;
+            const lines = text.split(/\r\n|\n|\r/);
+            lines.forEach((line) => {
+                if (!line.trim() || line.startsWith('time,') || line.startsWith('﻿time,')) {
+                    return;
+                }
+                const parts = parseCsvLine(line);
+                if (parts.length < 10) return;
+
+                const timeStr = parts[0].trim();
+                const elapsed = parseFloat(parts[1]);
+                const vals = [];
+                for (let i = 0; i < 8; i++) {
+                    const raw = parts[2 + i] ? parts[2 + i].trim() : '';
+                    if (raw === '') {
+                        vals.push(NaN);
+                    } else {
+                        const parsed = parseFloat(raw);
+                        vals.push(isNaN(parsed) ? NaN : Math.max(-80.0, Math.min(-20.0, parsed)));
+                    }
+                }
+                const ev = parts[10] ? parts[10].trim() : '';
+
+                parsedData.push({
+                    timeStr: timeStr,
+                    elapsed: isNaN(elapsed) ? 0 : elapsed,
+                    values: vals,
+                    event: ev
+                });
+            });
+        });
+
+        parsedData.sort((a, b) => a.elapsed - b.elapsed);
+
+        zoomStart = 0.0;
+        zoomEnd = 1.0;
+        currentMinY = DEFAULT_MIN_Y;
+        currentMaxY = DEFAULT_MAX_Y;
+        inputMinY.value = currentMinY;
+        inputMaxY.value = currentMaxY;
+
+        statusMsg.textContent = `已加载 ${parsedData.length} 行数据`;
+        resizeCanvas();
+        renderChart();
+        renderStats();
+    }
+
+    function parseCsvLine(line) {
+        const result = [];
+        let cur = '';
+        let inQuote = false;
+        for (let i = 0; i < line.length; i++) {
+            const c = line[i];
+            if (c === '"') {
+                if (inQuote && i + 1 < line.length && line[i + 1] === '"') {
+                    cur += '"';
+                    i++;
+                } else {
+                    inQuote = !inQuote;
+                }
+            } else if (c === ',' && !inQuote) {
+                result.push(cur);
+                cur = '';
+            } else {
+                cur += c;
+            }
+        }
+        result.push(cur);
+        return result;
+    }
+
+    function resetZoom() {
+        zoomStart = 0.0;
+        zoomEnd = 1.0;
+        currentMinY = DEFAULT_MIN_Y;
+        currentMaxY = DEFAULT_MAX_Y;
+        inputMinY.value = currentMinY;
+        inputMaxY.value = currentMaxY;
+        renderChart();
+        renderStats();
+    }
+
+    function zoomCenter(factor) {
+        const center = (zoomStart + zoomEnd) / 2.0;
+        const span = (zoomEnd - zoomStart) * factor;
+        zoomStart = Math.max(0.0, center - span / 2.0);
+        zoomEnd = Math.min(1.0, center + span / 2.0);
+        if (zoomEnd <= zoomStart) { zoomStart = 0.0; zoomEnd = 1.0; }
+
+        const yCenter = (currentMinY + currentMaxY) / 2.0;
+        const ySpan = (currentMaxY - currentMinY) * factor;
+        currentMinY = Math.round(yCenter - ySpan / 2.0);
+        currentMaxY = Math.round(yCenter + ySpan / 2.0);
+        if (currentMaxY <= currentMinY) { currentMaxY = currentMinY + 10; }
+        inputMinY.value = currentMinY;
+        inputMaxY.value = currentMaxY;
+
+        renderChart();
+        renderStats();
+    }
+
+    function autoFitYRange() {
+        if (!parsedData || parsedData.length === 0) return;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        parsedData.forEach(d => {
+            d.values.forEach((v, ch) => {
+                if (channelVisible[ch] && !isNaN(v)) {
+                    if (v < minY) minY = v;
+                    if (v > maxY) maxY = v;
+                }
+            });
+        });
+        if (minY !== Infinity && maxY !== -Infinity) {
+            currentMinY = Math.floor((minY - 3) / 5) * 5;
+            currentMaxY = Math.ceil((maxY + 3) / 5) * 5;
+            if (currentMinY === currentMaxY) { currentMinY -= 5; currentMaxY += 5; }
+            inputMinY.value = currentMinY;
+            inputMaxY.value = currentMaxY;
+            renderChart();
+        }
+    }
+
+    function applyManualYRange() {
+        let nMin = parseFloat(inputMinY.value);
+        let nMax = parseFloat(inputMaxY.value);
+        if (!isNaN(nMin) && !isNaN(nMax) && nMax > nMin) {
+            currentMinY = nMin;
+            currentMaxY = nMax;
+            renderChart();
+        }
+    }
+
+    function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        renderChart();
+    });
+
+    const margin = { top: 20, right: 30, bottom: 40, left: 60 };
+
+    function getPlotDimensions() {
+        const width = canvas.width / window.devicePixelRatio;
+        const height = canvas.height / window.devicePixelRatio;
+        const plotW = Math.max(10, width - margin.left - margin.right);
+        const plotH = Math.max(10, height - margin.top - margin.bottom);
+        return { width, height, plotW, plotH };
+    }
+
+    function renderChart() {
+        const { width, height, plotW, plotH } = getPlotDimensions();
+        ctx.clearRect(0, 0, width, height);
+
+        // 更新缩放指示器
+        const zoomPercent = Math.round(100 / (zoomEnd - zoomStart));
+        zoomRatioLabel.textContent = `缩放: ${zoomPercent}% | 幅值: ${currentMinY} ~ ${currentMaxY} dBm`;
+
+        if (!parsedData || parsedData.length === 0) {
+            ctx.fillStyle = '#666';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('暂无数据，请选择 peaks.csv 文件', width / 2, height / 2);
+            return;
+        }
+
+        const startIdx = Math.floor(zoomStart * (parsedData.length - 1));
+        const endIdx = Math.ceil(zoomEnd * (parsedData.length - 1));
+        const activeData = parsedData.slice(startIdx, endIdx + 1);
+
+        if (activeData.length < 2) return;
+
+        const minY = currentMinY;
+        const maxY = currentMaxY;
+
+        const minElapsed = activeData[0].elapsed;
+        const maxElapsed = activeData[activeData.length - 1].elapsed;
+        const elapsedSpan = (maxElapsed - minElapsed) || 1;
+
+        function getX(elapsed) {
+            return margin.left + ((elapsed - minElapsed) / elapsedSpan) * plotW;
+        }
+        function getY(v) {
+            return margin.top + ((maxY - v) / (maxY - minY)) * plotH;
+        }
+
+        // 绘制坐标轴与网格
+        ctx.strokeStyle = '#2d2d2d';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#888';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'right';
+
+        // Y 轴刻度 (自适应步长)
+        const yRange = maxY - minY;
+        const yStep = (yRange <= 10) ? 1 : ((yRange <= 25) ? 2 : ((yRange <= 50) ? 5 : ((yRange <= 100) ? 10 : 20)));
+        const firstTick = Math.ceil(minY / yStep) * yStep;
+
+        for (let yVal = firstTick; yVal <= maxY; yVal += yStep) {
+            const yPos = getY(yVal);
+            if (yPos >= margin.top && yPos <= margin.top + plotH) {
+                ctx.beginPath();
+                ctx.moveTo(margin.left, yPos);
+                ctx.lineTo(margin.left + plotW, yPos);
+                ctx.stroke();
+                ctx.fillText(yVal.toFixed(0) + ' dBm', margin.left - 6, yPos + 4);
+            }
+        }
+
+        // X 轴刻度 (时间)
+        ctx.textAlign = 'center';
+        const numXTicks = Math.min(8, activeData.length);
+        for (let i = 0; i < numXTicks; i++) {
+            const idx = Math.floor((i / (numXTicks - 1)) * (activeData.length - 1));
+            const item = activeData[idx];
+            const xPos = getX(item.elapsed);
+            ctx.beginPath();
+            ctx.moveTo(xPos, margin.top);
+            ctx.lineTo(xPos, margin.top + plotH);
+            ctx.stroke();
+
+            let timeLabel = item.timeStr ? item.timeStr.split(' ')[1] || item.timeStr : item.elapsed.toFixed(1) + 's';
+            if (timeLabel.length > 12) timeLabel = timeLabel.slice(0, 12);
+            ctx.fillText(timeLabel, xPos, margin.top + plotH + 18);
+        }
+
+        // 绘制折线（裁剪在绘图区域内）
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(margin.left, margin.top, plotW, plotH);
+        ctx.clip();
+
+        CHANNELS.forEach((ch, chIdx) => {
+            if (!channelVisible[chIdx]) return;
+
+            ctx.strokeStyle = ch.color;
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            let isDrawing = false;
+            let lastElapsed = 0;
+
+            for (let i = 0; i < activeData.length; i++) {
+                const item = activeData[i];
+                const val = item.values[chIdx];
+
+                const isGap = isDrawing && (item.elapsed - lastElapsed > 10.0);
+
+                if (isNaN(val) || isGap) {
+                    isDrawing = false;
+                } else {
+                    const x = getX(item.elapsed);
+                    const y = getY(val);
+                    if (!isDrawing) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        isDrawing = true;
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                    lastElapsed = item.elapsed;
+                }
+                if (!isDrawing && i > 0) {
+                    ctx.stroke();
+                }
+            }
+            if (isDrawing) {
+                ctx.stroke();
+            }
+        });
+
+        ctx.restore();
+
+        // 绘制鼠标框选框高亮
+        if (isSelecting) {
+            const boxX = Math.min(selectStartX, selectCurrentX);
+            const boxY = Math.min(selectStartY, selectCurrentY);
+            const boxW = Math.abs(selectCurrentX - selectStartX);
+            const boxH = Math.abs(selectCurrentY - selectStartY);
+
+            ctx.fillStyle = 'rgba(0, 122, 204, 0.22)';
+            ctx.fillRect(boxX, boxY, boxW, boxH);
+            ctx.strokeStyle = '#007acc';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(boxX, boxY, boxW, boxH);
+        }
+    }
+
+    // 禁用默认右键菜单，支持右键拖拽平移
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // 鼠标交互：框选放大、拖拽平移、滚轮缩放、悬浮提示
+    canvas.addEventListener('mousedown', (e) => {
+        if (!parsedData || parsedData.length === 0) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        const { plotW, plotH } = getPlotDimensions();
+
+        if (e.button === 0) {
+            // 左键：开始框选放大
+            if (mx >= margin.left && mx <= margin.left + plotW && my >= margin.top && my <= margin.top + plotH) {
+                isSelecting = true;
+                selectStartX = mx;
+                selectStartY = my;
+                selectCurrentX = mx;
+                selectCurrentY = my;
+                tooltip.style.display = 'none';
+            }
+        } else if (e.button === 2) {
+            // 右键：开始拖拽平移
+            isPanning = true;
+            panStartX = mx;
+            panStartY = my;
+            panInitialZoomStart = zoomStart;
+            panInitialZoomEnd = zoomEnd;
+            panInitialMinY = currentMinY;
+            panInitialMaxY = currentMaxY;
+            canvas.style.cursor = 'grab';
+            tooltip.style.display = 'none';
+        }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const { plotW, plotH } = getPlotDimensions();
+
+        if (isSelecting) {
+            selectCurrentX = Math.max(margin.left, Math.min(margin.left + plotW, mx));
+            selectCurrentY = Math.max(margin.top, Math.min(margin.top + plotH, my));
+            renderChart();
+            return;
+        }
+
+        if (isPanning) {
+            const dx = mx - panStartX;
+            const dy = my - panStartY;
+
+            // X 轴平移
+            const zoomSpan = panInitialZoomEnd - panInitialZoomStart;
+            const xShift = (dx / plotW) * zoomSpan;
+            let newStart = panInitialZoomStart - xShift;
+            let newEnd = panInitialZoomEnd - xShift;
+
+            if (newStart < 0) { newEnd -= newStart; newStart = 0; }
+            if (newEnd > 1.0) { newStart -= (newEnd - 1.0); newEnd = 1.0; }
+            zoomStart = Math.max(0, Math.min(1.0 - zoomSpan, newStart));
+            zoomEnd = Math.max(zoomSpan, Math.min(1.0, newEnd));
+
+            // Y 轴平移
+            const ySpan = panInitialMaxY - panInitialMinY;
+            const yShift = (dy / plotH) * ySpan;
+            currentMinY = Math.round(panInitialMinY + yShift);
+            currentMaxY = Math.round(panInitialMaxY + yShift);
+            inputMinY.value = currentMinY;
+            inputMaxY.value = currentMaxY;
+
+            renderChart();
+            renderStats();
+            return;
+        }
+
+        // 普通悬浮 Tooltip
+        if (!parsedData || parsedData.length === 0) return;
+        if (mx < margin.left || mx > margin.left + plotW || my < margin.top || my > margin.top + plotH) {
+            tooltip.style.display = 'none';
+            return;
+        }
+
+        const startIdx = Math.floor(zoomStart * (parsedData.length - 1));
+        const endIdx = Math.ceil(zoomEnd * (parsedData.length - 1));
+        const activeData = parsedData.slice(startIdx, endIdx + 1);
+        if (activeData.length === 0) return;
+
+        const ratio = (mx - margin.left) / plotW;
+        const targetIdx = Math.min(activeData.length - 1, Math.max(0, Math.round(ratio * (activeData.length - 1))));
+        const item = activeData[targetIdx];
+
+        let html = `<div style="color:#aaa;margin-bottom:4px;">${item.timeStr} (+${item.elapsed.toFixed(1)}s)</div>`;
+        CHANNELS.forEach((ch, idx) => {
+            if (channelVisible[idx]) {
+                const v = item.values[idx];
+                const vText = isNaN(v) ? '--' : (formatVal(v) + ' dBm');
+                html += `<div><span class="color-dot" style="background:${ch.color}"></span>${ch.name}: <b>${vText}</b></div>`;
+            }
+        });
+
+        tooltip.innerHTML = html;
+        tooltip.style.display = 'block';
+        tooltip.style.left = Math.min(rect.width - 200, mx + 15) + 'px';
+        tooltip.style.top = Math.max(10, my - 40) + 'px';
+    });
+
+    window.addEventListener('mouseup', (e) => {
+        if (isSelecting) {
+            isSelecting = false;
+            const { plotW, plotH } = getPlotDimensions();
+            const minX = Math.min(selectStartX, selectCurrentX);
+            const maxX = Math.max(selectStartX, selectCurrentX);
+            const minYPx = Math.min(selectStartY, selectCurrentY);
+            const maxYPx = Math.max(selectStartY, selectCurrentY);
+
+            // 框选宽度大于 8px 时执行缩放
+            if (maxX - minX > 8) {
+                const currentSpan = zoomEnd - zoomStart;
+                const ratioStart = (minX - margin.left) / plotW;
+                const ratioEnd = (maxX - margin.left) / plotW;
+
+                const newZoomStart = zoomStart + ratioStart * currentSpan;
+                const newZoomEnd = zoomStart + ratioEnd * currentSpan;
+
+                zoomStart = Math.max(0.0, Math.min(0.995, newZoomStart));
+                zoomEnd = Math.max(zoomStart + 0.005, Math.min(1.0, newZoomEnd));
+            }
+
+            // 框选高度大于 8px 时执行 Y 轴缩放
+            if (maxYPx - minYPx > 8) {
+                const currentYRange = currentMaxY - currentMinY;
+                const newMaxY = currentMaxY - ((minYPx - margin.top) / plotH) * currentYRange;
+                const newMinY = currentMaxY - ((maxYPx - margin.top) / plotH) * currentYRange;
+
+                if (newMaxY - newMinY >= 2) {
+                    currentMinY = Math.round(newMinY);
+                    currentMaxY = Math.round(newMaxY);
+                    inputMinY.value = currentMinY;
+                    inputMaxY.value = currentMaxY;
+                }
+            }
+
+            renderChart();
+            renderStats();
+        }
+
+        if (isPanning) {
+            isPanning = false;
+            canvas.style.cursor = 'crosshair';
+        }
+    });
+
+    // 鼠标滚轮缩放 (以鼠标所在点为中心缩放)
+    canvas.addEventListener('wheel', (e) => {
+        if (!parsedData || parsedData.length === 0) return;
+        e.preventDefault();
+
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const { plotW, plotH } = getPlotDimensions();
+
+        if (mx < margin.left || mx > margin.left + plotW || my < margin.top || my > margin.top + plotH) {
+            return;
+        }
+
+        const factor = e.deltaY < 0 ? 0.8 : 1.25;
+
+        // X 轴缩放
+        const xRatio = (mx - margin.left) / plotW;
+        const currentCenter = zoomStart + xRatio * (zoomEnd - zoomStart);
+        const newSpan = (zoomEnd - zoomStart) * factor;
+
+        let newStart = currentCenter - xRatio * newSpan;
+        let newEnd = currentCenter + (1.0 - xRatio) * newSpan;
+
+        if (newSpan >= 1.0) {
+            newStart = 0.0;
+            newEnd = 1.0;
+        } else {
+            if (newStart < 0) { newEnd += (0 - newStart); newStart = 0; }
+            if (newEnd > 1.0) { newStart -= (newEnd - 1.0); newEnd = 1.0; }
+            newStart = Math.max(0, newStart);
+            newEnd = Math.min(1.0, newEnd);
+        }
+        zoomStart = newStart;
+        zoomEnd = newEnd;
+
+        // Y 轴缩放 (当按住 Shift 键或正常滚轮微调)
+        const yRatio = (my - margin.top) / plotH;
+        const currentYCenter = currentMaxY - yRatio * (currentMaxY - currentMinY);
+        const newYSpan = (currentMaxY - currentMinY) * factor;
+        if (newYSpan >= 5 && newYSpan <= 120) {
+            currentMinY = Math.round(currentYCenter - (1.0 - yRatio) * newYSpan);
+            currentMaxY = Math.round(currentYCenter + yRatio * newYSpan);
+            inputMinY.value = currentMinY;
+            inputMaxY.value = currentMaxY;
+        }
+
+        renderChart();
+        renderStats();
+    });
+
+    // 鼠标双击重置缩放
+    canvas.addEventListener('dblclick', () => {
+        resetZoom();
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        tooltip.style.display = 'none';
+    });
+
+    // 统计信息渲染（分通道统计显著变化次数，移除有效点数与峰峰值）
+    function renderStats() {
+        const tbody = document.getElementById('statsBody');
+        tbody.innerHTML = '';
+
+        if (!parsedData || parsedData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#777;">无可用数据</td></tr>';
+            return;
+        }
+
+        const startIdx = Math.floor(zoomStart * (parsedData.length - 1));
+        const endIdx = Math.ceil(zoomEnd * (parsedData.length - 1));
+        const activeData = parsedData.slice(startIdx, endIdx + 1);
+
+        CHANNELS.forEach((ch, idx) => {
+            if (!channelVisible[idx]) return;
+
+            let firstVal = NaN;
+            let lastVal = NaN;
+            let minVal = Infinity;
+            let maxVal = -Infinity;
+            let sum = 0;
+            let count = 0;
+            let sigCount = 0;
+            let lastSigVal = NaN;
+
+            activeData.forEach(d => {
+                const v = d.values[idx];
+                if (!isNaN(v)) {
+                    if (isNaN(firstVal)) firstVal = v;
+                    lastVal = v;
+                    if (v < minVal) minVal = v;
+                    if (v > maxVal) maxVal = v;
+                    sum += v;
+                    count++;
+
+                    if (isNaN(lastSigVal)) {
+                        lastSigVal = v;
+                    } else if (Math.abs(v - lastSigVal) >= 3.0) {
+                        sigCount++;
+                        lastSigVal = v;
+                    }
+                }
+            });
+
+            const avgVal = count > 0 ? (sum / count) : NaN;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><span class="color-dot" style="background:${ch.color}"></span><b>${ch.name}</b></td>
+                <td>${formatVal(firstVal)}</td>
+                <td>${formatVal(lastVal)}</td>
+                <td>${formatVal(maxVal)}</td>
+                <td>${formatVal(minVal)}</td>
+                <td>${formatVal(avgVal)}</td>
+                <td>${sigCount}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function formatVal(v) {
+        if (isNaN(v) || v === null || v === undefined) return '--';
+        if (Number.isInteger(v)) return v.toString();
+        if (Math.abs(v - Math.round(v)) < 1e-6) return Math.round(v).toString();
+        return v.toFixed(1);
+    }
+</script>
+</body>
+</html>

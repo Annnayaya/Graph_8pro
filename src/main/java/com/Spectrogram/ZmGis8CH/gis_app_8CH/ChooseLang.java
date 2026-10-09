@@ -13,9 +13,9 @@ import Language.Lang_zh_CN;
 public class ChooseLang {
 	public static int initlang = 0;
 	public static int initchnum = 0;
-	// 【修改点1】将数组大小从 400 改为 411 (以容纳 0-404 的索引)
-	public static Object[] O = new Object[411];
-	public static String[] M = new String[411];
+	// 将数组大小扩充为 430 (以容纳 0-419 及后续扩展索引)
+	public static Object[] O = new Object[430];
+	public static String[] M = new String[430];
 
 	public static String[] A = {
 			"English"
@@ -42,83 +42,74 @@ public class ChooseLang {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		Object[][] data = null;
 		switch(initlang){
 			//英语
 			case 0 :
 			{
 				JOptionPane.setDefaultLocale(Locale.ENGLISH);
 				Lang_en_US en = new Lang_en_US();
-				Object[][] data = en.getData(); // 获取数据源
-				// 【修改点2】循环限制改为 411，并添加长度检查防止越界
-				for(int i = 0; i < 411; i++){
-					if (i < data.length) { // 安全检查：防止英文文件行数不足导致崩溃
-						O[i] = data[i][1];
-						M[i] = O[i].toString();
-					} else {
-						M[i] = ""; // 如果语言文件缺少该行，给个默认空值防止 GUI 报错
-					}
-				}
+				data = en.getData();
 			}break;
 			//日语
 			case 1 :
 			{
 				JOptionPane.setDefaultLocale(Locale.JAPAN);
 				Lang_ja_JP ja = new Lang_ja_JP();
-				Object[][] data = ja.getData();
-				for(int i = 0; i < 411; i++){
-					if (i < data.length) {
-						O[i] = data[i][1];
-						M[i] = O[i].toString();
-					} else {
-						M[i] = "";
-					}
-				}
+				data = ja.getData();
 			}break;
 			//韩语
 			case 2 :
 			{
 				JOptionPane.setDefaultLocale(Locale.KOREA);
 				Lang_ko_KR ko = new Lang_ko_KR();
-				Object[][] data = ko.getData();
-				for(int i = 0; i < 411; i++){
-					if (i < data.length) {
-						O[i] = data[i][1];
-						M[i] = O[i].toString();
-					} else {
-						M[i] = "";
-					}
-				}
+				data = ko.getData();
 			}break;
 			//葡萄牙语
 			case 3 :
 			{
 				JOptionPane.setDefaultLocale(Locale.FRENCH);
 				Lang_pt_BR pt = new Lang_pt_BR();
-				Object[][] data = pt.getData();
-				for(int i = 0; i < 411; i++){
-					if (i < data.length) {
-						O[i] = data[i][1];
-						M[i] = O[i].toString();
-					} else {
-						M[i] = "";
-					}
-				}
+				data = pt.getData();
 			}break;
 			//简体中文
 			case 4 :
+			default:
 			{
 				JOptionPane.setDefaultLocale(Locale.CHINA);
 				Lang_zh_CN zh = new Lang_zh_CN();
-				Object[][] data = zh.getData();
-				for(int i = 0; i < 411; i++){
-					if (i < data.length) {
-						O[i] = data[i][1];
-						M[i] = O[i].toString();
-					} else {
-						M[i] = "";
-					}
-				}
+				data = zh.getData();
 			}break;
+		}
+
+		for(int i = 0; i < 430; i++){
+			if (data != null && i < data.length && data[i] != null && data[i].length > 1 && data[i][1] != null) {
+				O[i] = data[i][1];
+				M[i] = O[i].toString();
+			} else {
+				O[i] = "";
+				M[i] = "";
+			}
+		}
+
+		// 为 411-419 提供关键文案兜底，防止外部旧配置文件缺少新键导致按钮空白
+		applyFallback(411, "持久测试");
+		applyFallback(412, "等待采集");
+		applyFallback(413, "预热");
+		applyFallback(414, "初始化");
+		applyFallback(415, "持久测试中");
+		applyFallback(416, "结果已保持");
+		applyFallback(417, "持久峰值");
+		applyFallback(418, "CSV写入异常");
+		applyFallback(419, "打开趋势图");
+	}
+
+	private static void applyFallback(int index, String defaultText) {
+		if (index >= 0 && index < M.length) {
+			if (M[index] == null || M[index].trim().isEmpty()) {
+				M[index] = defaultText;
+				O[index] = defaultText;
+			}
 		}
 	}
 

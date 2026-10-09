@@ -1,6 +1,8 @@
 package com.Spectrogram.ZmGis8CH.gis_app_8CH;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.*;
@@ -16,6 +18,7 @@ class MemoPanel extends JPanel
 	GisXYZ gm;
 	GisExplorer ge;
 	JLabel memoLabel;
+	JLabel versionLabel;
 	JTextField memoText1;
 	JTextField memoText2;
 	JComboBox<String> memoCombo;
@@ -33,6 +36,12 @@ class MemoPanel extends JPanel
 		//memoLabel = new JLabel((new StringBuilder()).append(" ").append(ChooseLang.M[140]).append(" 0000/00/00 00:00:00 ").toString());
 		memoLabel = new JLabel((new StringBuilder()).append(" ").append(ChooseLang.M[145]).append(" 0000/00/00 00:00:00 ").toString());
 		memoLabel.setFont(GisXYZ.fontG);
+		String appVer = AppGlobalConfig.getAppVersion();
+		if (appVer == null || appVer.trim().isEmpty()) {
+			appVer = LicenseManager.formatDisplayVersion(AppGlobalConfig.DEFAULT_APP_VERSION);
+		}
+		versionLabel = new JLabel(appVer + "  ");
+		versionLabel.setFont(GisXYZ.fontG);
 		memoText1 = new JTextField("");
 		memoText1.setFont(GisXYZ.fontG);
 		memoText1.setPreferredSize(new Dimension(100, 20));
@@ -63,7 +72,17 @@ class MemoPanel extends JPanel
 		jpanel.add(jpanel2, "Center");
 		add(memoLabel, "West");
 		add(jpanel, "Center");
-		add(memoSave, "East");
+		JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+		rightPanel.setOpaque(false);
+		rightPanel.add(memoSave);
+		if (LicenseManager.isSpecialLicense()) {
+			JLabel specialWarnLabel = new JLabel("未授权软件，仅供调试使用");
+			specialWarnLabel.setFont(GisXYZ.fontG);
+			specialWarnLabel.setForeground(new Color(220, 38, 38)); // 醒目警戒红
+			rightPanel.add(specialWarnLabel);
+		}
+		rightPanel.add(versionLabel);
+		add(rightPanel, "East");
 		memoText1.addCaretListener(new CaretListener() {
 
 			public void caretUpdate(CaretEvent caretevent)

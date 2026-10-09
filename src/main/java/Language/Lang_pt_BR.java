@@ -411,9 +411,9 @@ public class Lang_pt_BR extends ListResourceBundle {
 			,{"398",""}
 			,{"399",""},{"400","Max"},{"401","Avg"},{"402","amplitude"},{"403","phase"},{"404","time"},
 			{"405","Select 100 (Single Select only)"},{"406","Check All"},{"407","Uncheck All"},
-			{"408","Start continuous data acquisition"},{"409","Acquire one screen of data"},{"410","Please select a start timestamp"}
-
-
+			{"408","Start continuous data acquisition"},{"409","Acquire one screen of data"},{"410","Please select a start timestamp"},
+			{"411","Teste Persistente"},{"412","Aguardando Coleta"},{"413","Pré-aquecendo"},{"414","Inicializando"},{"415","Testando"},
+			{"416","Resultado Mantido"},{"417","Pico Persistente"},{"418","Erro CSV"},{"419","Abrir Gráfico"}
 	};
 	
 	protected Object[][] getContents() {
